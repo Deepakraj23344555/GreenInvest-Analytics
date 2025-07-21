@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 
-# -------------------- Page Configuration --------------------
+# -------------------- Page Setup --------------------
 st.set_page_config(page_title="GreenInvest Analytics", page_icon="🌱", layout="wide")
 
 # -------------------- Sidebar --------------------
@@ -9,67 +9,80 @@ with st.sidebar:
     st.title("📊 About GreenInvest")
     st.markdown("""
     GreenInvest Analytics empowers **SMEs** to measure and improve their **ESG performance**.
-    
-    🟢 Input operational data  
-    🟢 Get automated ESG scores  
-    🟢 Receive tailored sustainability advice  
-    🟢 Discover green finance opportunities  
+
+    🌿 Input operational data  
+    🌿 Receive an ESG score  
+    🌿 Get personalized sustainability tips  
+    🌿 Access green finance based on your score  
     """)
     st.markdown("---")
-    st.markdown("Made with ❤️ by Deepak Raj")
+    st.markdown("📧 Contact: greeninvest@example.com")
 
-# -------------------- Main Title --------------------
-st.markdown("<h1 style='text-align: center;'>🌿 GreenInvest Analytics</h1>", unsafe_allow_html=True)
-st.markdown("<h5 style='text-align: center; color: grey;'>Helping SMEs Achieve Sustainability & Attract Green Capital</h5>", unsafe_allow_html=True)
-
+# -------------------- Title --------------------
+st.markdown("<h1 style='text-align: center;'>🌱 GreenInvest Analytics</h1>", unsafe_allow_html=True)
+st.markdown("<h5 style='text-align: center; color: grey;'>Empowering SMEs to Measure, Improve, and Fund Sustainability</h5>", unsafe_allow_html=True)
 st.markdown("---")
 
-# -------------------- ESG Input Form --------------------
-st.subheader("📥 ESG Data Input")
+# -------------------- Form --------------------
+st.subheader("📥 ESG Metrics Input")
 
 with st.form("esg_form"):
     col1, col2, col3 = st.columns(3)
     with col1:
-        energy_consumption = st.number_input("🔌 Energy Consumption (kWh/month)", min_value=0.0)
+        energy = st.number_input("🔌 Energy Consumption (kWh/month)", min_value=0.0)
     with col2:
-        waste_generated = st.number_input("🗑️ Waste Generated (kg/month)", min_value=0.0)
+        waste = st.number_input("🗑️ Waste Generated (kg/month)", min_value=0.0)
     with col3:
-        water_usage = st.number_input("🚰 Water Usage (liters/month)", min_value=0.0)
-
+        water = st.number_input("🚰 Water Usage (liters/month)", min_value=0.0)
     submitted = st.form_submit_button("📊 Calculate ESG Score")
 
-# -------------------- ESG Score Calculation --------------------
+# -------------------- Logic Functions --------------------
 def calculate_esg_score(energy, waste, water):
     score = 100 - (energy * 0.03 + waste * 0.04 + water * 0.02)
     return max(min(score, 100), 0)
 
-def get_recommendations(energy, waste, water):
-    recs = []
-    if energy > 1000:
-        recs.append("🔋 Consider switching to renewable energy sources or improving energy efficiency.")
-    if waste > 500:
-        recs.append("♻️ Implement waste reduction and recycling programs.")
-    if water > 2000:
-        recs.append("💧 Adopt water-saving technologies and practices.")
-    if not recs:
-        recs.append("✅ Excellent! Your operations are highly sustainable.")
-    return recs
+def get_score_status(score):
+    if score >= 80:
+        return "Excellent", "green"
+    elif score >= 60:
+        return "Good", "orange"
+    else:
+        return "Needs Improvement", "red"
 
-# -------------------- Display ESG Score and Recommendations --------------------
+def get_score_recommendations(score):
+    if score >= 80:
+        return [
+            "✅ Your ESG performance is excellent. Maintain current standards.",
+            "📈 You may qualify for ESG-focused investment capital.",
+            "🌟 Consider publishing a sustainability report to improve transparency."
+        ]
+    elif score >= 60:
+        return [
+            "♻️ Improve waste segregation or use recyclable materials.",
+            "💧 Install water-saving devices or optimize usage.",
+            "🔋 Explore partial transition to renewable energy."
+        ]
+    else:
+        return [
+            "🆘 High carbon footprint: Begin with energy audits.",
+            "🔄 Start a basic waste and water management program.",
+            "📚 Attend ESG training or consult local sustainability advisors."
+        ]
+
+def filter_finance_opportunities(df, score):
+    if score < 60:
+        return df[df["Type"] == "Grant"]
+    elif score < 80:
+        return df[df["Type"] == "Loan"]
+    else:
+        return df[df["Type"] == "Investor"]
+
+# -------------------- Result Display --------------------
 if submitted:
-    score = calculate_esg_score(energy_consumption, waste_generated, water_usage)
+    score = calculate_esg_score(energy, waste, water)
+    status, color = get_score_status(score)
 
     st.markdown("## 🧾 Your ESG Score")
-    if score >= 80:
-        color = "green"
-        status = "Excellent"
-    elif score >= 60:
-        color = "orange"
-        status = "Good"
-    else:
-        color = "red"
-        status = "Needs Improvement"
-
     st.markdown(f"""
     <div style='border:2px solid {color}; border-radius:10px; padding:20px; text-align:center; background-color:#f9f9f9;'>
         <h2 style='color:{color};'>{score:.2f} / 100</h2>
@@ -77,18 +90,24 @@ if submitted:
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("## 🛠️ Tailored Recommendations")
-    for rec in get_recommendations(energy_consumption, waste_generated, water_usage):
+    # Recommendations
+    st.markdown("## 🛠️ Tailored Sustainability Recommendations")
+    for rec in get_score_recommendations(score):
         st.success(rec)
 
-# -------------------- Green Finance Opportunities --------------------
-st.markdown("---")
-st.subheader("💰 Explore Green Finance Opportunities")
+    # Finance Opportunities
+    st.markdown("---")
+    st.markdown("## 💰 Finance Opportunities Based on Your ESG Score")
 
-try:
-    df = pd.read_csv("data/green_finance_db.csv")
-    df["Website"] = df["Website"].apply(lambda x: f"[Visit]({x})")
-    st.dataframe(df, use_container_width=True)
-except FileNotFoundError:
-    st.warning("Green finance database not found. Please upload `data/green_finance_db.csv`.")
+    try:
+        df = pd.read_csv("data/green_finance_db.csv")
+        df["Website"] = df["Website"].apply(lambda x: f"[Visit]({x})")
+        filtered = filter_finance_opportunities(df, score)
 
+        if not filtered.empty:
+            st.dataframe(filtered.reset_index(drop=True), use_container_width=True)
+        else:
+            st.info("No finance opportunities matched your score. Check back later!")
+
+    except FileNotFoundError:
+        st.warning("⚠️ Missing file: `data/green_finance_db.csv` not found.")
