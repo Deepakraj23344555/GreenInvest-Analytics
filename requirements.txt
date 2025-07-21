@@ -1,7 +1,3 @@
 streamlit
-yfinance
-pyportfolioopt
 pandas
-numpy
-scipy
-matplotlib
+plotly
