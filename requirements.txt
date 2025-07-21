@@ -1,5 +1,7 @@
 streamlit
 yfinance
+pyportfolioopt
 pandas
 numpy
-PyPortfolioOpt
+scipy
+matplotlib
