@@ -111,3 +111,23 @@ if submitted:
 
     except FileNotFoundError:
         st.warning("⚠️ Missing file: `data/green_finance_db.csv` not found.")
+
+import plotly.express as px
+
+# Store and update ESG history (temporary, not persistent)
+if "score_history" not in st.session_state:
+    st.session_state.score_history = []
+
+if submitted:
+    st.session_state.score_history.append(score)
+
+# Show ESG trend
+if len(st.session_state.score_history) > 1:
+    st.markdown("## 📊 ESG Score Trend")
+    trend_df = pd.DataFrame({
+        "Attempt": list(range(1, len(st.session_state.score_history) + 1)),
+        "ESG Score": st.session_state.score_history
+    })
+    fig = px.line(trend_df, x="Attempt", y="ESG Score", markers=True)
+    st.plotly_chart(fig, use_container_width=True)
+
