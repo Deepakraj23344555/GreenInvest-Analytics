@@ -1,31 +1,39 @@
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="GreenInvest Analytics",
-    page_icon="🌿",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="GreenInvest Analytics", page_icon="🌱")
 
-# --- Main Application ---
-st.title("🌿 GreenInvest Analytics")
-st.markdown("Welcome to the GreenInvest Analytics platform. Our goal is to help SMEs measure, improve, and report on their ESG performance to unlock green finance opportunities.")
+st.title("🌿 GreenInvest Analytics - ESG Scoring for SMEs")
 
-st.info("This is a demonstration platform. Please follow the steps in the sidebar to analyze your business's ESG performance.", icon="ℹ️")
+with st.form("esg_form"):
+    st.header("Input Your ESG Data")
 
-# --- Sidebar ---
-st.sidebar.header("Configuration")
-st.sidebar.write("Please provide your company's data below.")
+    energy_consumption = st.number_input("Energy Consumption (kWh/month)", min_value=0.0)
+    waste_generated = st.number_input("Waste Generated (kg/month)", min_value=0.0)
+    water_usage = st.number_input("Water Usage (liters/month)", min_value=0.0)
 
-# Placeholder for future steps
-st.sidebar.button("Calculate ESG Score", type="primary")
+    submitted = st.form_submit_button("Calculate ESG Score")
 
-st.header("Your ESG Dashboard")
-st.write("Your results will be displayed here once you input your data and calculate the score.")
+def calculate_esg_score(energy, waste, water):
+    score = 100 - (energy * 0.3 + waste * 0.4 + water * 0.3)
+    return max(min(score, 100), 0)
 
-# --- Footer ---
-st.markdown("---")
-st.write("Made with ❤️ for a greener future.")
+def get_recommendations(energy, waste, water):
+    recs = []
+    if energy > 1000:
+        recs.append("Consider switching to renewable energy sources or improving energy efficiency.")
+    if waste > 500:
+        recs.append("Implement waste reduction and recycling programs.")
+    if water > 2000:
+        recs.append("Adopt water-saving technologies and practices.")
+    if not recs:
+        recs.append("Great job! Keep maintaining sustainable operations.")
+    return recs
+
+if submitted:
+    score = calculate_esg_score(energy_consumption, waste_generated, water_usage)
+    st.metric("Your ESG Score", f"{score:.2f} / 100")
+
+    st.subheader("Recommendations")
+    recs = get_recommendations(energy_consumption, waste_generated, water_usage)
+    for rec in recs:
+        st.write("- " + rec)
