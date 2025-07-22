@@ -194,7 +194,7 @@ def get_recommendations(e_score, s_score, g_score):
     recs = {'E': [], 'S': [], 'G': []}
     if e_score < 70: recs['E'].append("**High Impact:** Conduct a professional energy audit to identify efficiency opportunities.")
     if e_score < 80: recs['E'].append("**Medium Impact:** Implement a company-wide switch to LED lighting and optimize HVAC systems.")
-    if e_score < 60: recs['E'].append("Crital:** Develop a comprehensive waste reduction and recycling strategy.")
+    if e_score < 60: recs['E'].append("**Critical:** Develop a comprehensive waste reduction and recycling strategy.")
 
     if s_score < 70: recs['S'].append("**High Impact:** Introduce an anonymous employee feedback system to understand turnover causes.")
     if s_score < 80: recs['S'].append("**Medium Impact:** Implement diversity and inclusion training for all employees and management.")
@@ -247,11 +247,21 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         st.session_state.force_feedback_tab_active = False # Reset the flag
     else:
         # Otherwise, try to restore the last selected tab from session state, or default to first
-        initial_tab_index = st.session_state.get('last_display_dashboard_tab_index', 0)
+        # Ensure it's always an integer, defensive programming
+        initial_tab_index = int(st.session_state.get('last_display_dashboard_tab_index', 0))
 
     # Create the tabs. Store the selected label and its index.
     selected_tab_label = st.tabs(tab_labels, default_index=initial_tab_index, key="main_display_dashboard_tabs")
-    st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label) # Persist for next run
+    
+    # Print for debugging (you can remove this line after the issue is resolved)
+    # st.write(f"DEBUG: Initial Tab Index: {initial_tab_index}, Type: {type(initial_tab_index)}")
+    # st.write(f"DEBUG: Selected Tab Label: {selected_tab_label}")
+    # st.write(f"DEBUG: last_display_dashboard_tab_index before update: {st.session_state.get('last_display_dashboard_tab_index')}")
+
+    # Persist the index of the currently selected tab for next run
+    st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label)
+    # st.write(f"DEBUG: last_display_dashboard_tab_index AFTER update: {st.session_state.last_display_dashboard_tab_index}")
+
 
     # --- Tab Content Rendering ---
     if selected_tab_label == "📊 Performance Overview":
@@ -435,7 +445,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         for i in range(1, 6): # Stars from 1 to 5
             with cols[i-1]:
                 # Determine the star emoji for the button label
-                # These are standard emojis, not HTML.
+                # These are standard emojis. No unsafe_allow_html=True needed here.
                 star_emoji_display = "⭐" if i <= selected_rating else "☆" 
                 
                 # Removed unsafe_allow_html=True from st.button
