@@ -24,7 +24,6 @@ def init_db():
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
     # Create users table
-    # password_hash will now store bcrypt hashes
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -381,40 +380,9 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION SETUP ---
-
-# Function to get users in the format Authenticate expects
-def get_all_users_for_authenticator():
-    conn = sqlite3.connect(DATABASE_NAME)
-    c = conn.cursor()
-    c.execute("SELECT name, username, password_hash FROM users")
-    users_data = c.fetchall()
-    conn.close()
-    
-    # Authenticator expects a dictionary structure for credentials
-    credentials = {"usernames": {}}
-    for row in users_data:
-        name, username, password_hash = row
-        credentials["usernames"][username] = {
-            "name": name,
-            "password": password_hash # This is the bcrypt hash from DB
-        }
-    return credentials
-
-# Get credentials from database
-credentials = get_all_users_for_authenticator()
-
-# Initialize authenticator
-authenticator = Authenticate(
-    credentials,
-    'greeninvest_cookie', # cookie name
-    'abcdefgh', # cookie key (MUST be a long, strong, secret string for production!)
-    cookie_expiry_days=30
-)
-
-# --- Main App Logic (Conditional based on authentication status) ---
-# Call the login method
-name, authentication_status, username = authenticator.login('Login', 'main')
+# --- AUTHENTICATION STATUS HANDLERS ---
+# Call the login method with explicit keyword arguments
+name, authentication_status, username = authenticator.login(form_name='Login', location='main')
 
 if st.session_state["authentication_status"]:
     # User is authenticated
@@ -422,8 +390,8 @@ if st.session_state["authentication_status"]:
     st.session_state.name = name # Store user's display name
     st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
     
-    # Sidebar logout button
-    authenticator.logout('Logout', 'sidebar')
+    # Sidebar logout button with explicit keyword arguments
+    authenticator.logout(form_name='Logout', location='sidebar')
     
     # Welcome message and main app content
     st.title("🌿 GreenInvest Analytics")
@@ -452,13 +420,12 @@ if st.session_state["authentication_status"]:
         st.sidebar.header("Step 2: Input Your Data")
         # Initialize last input data for pre-filling, fetching from DB for current user if available
         if 'last_env_input' not in st.session_state:
-            # Try to pre-fill from the last historical record of the current user
-            latest_record = get_esg_history(st.session_state.user_id)
-            if latest_record:
-                latest_data = latest_record[-1] # Get the very last entry
-                st.session_state.last_env_input = latest_data['env_data']
-                st.session_state.last_social_input = latest_data['social_data']
-                st.session_state.last_gov_input = latest_data['gov_data']
+            latest_records = get_esg_history(st.session_state.user_id)
+            if latest_records:
+                latest_data_entry = latest_records[-1] # Get the very last entry
+                st.session_state.last_env_input = latest_data_entry['env_data']
+                st.session_state.last_social_input = latest_data_entry['social_data']
+                st.session_state.last_gov_input = latest_data_entry['gov_data']
             else:
                 # Fallback to default values if no history
                 st.session_state.last_env_input = {'energy': 50000, 'water': 2500, 'waste': 1000, 'recycling': 40}
@@ -602,7 +569,7 @@ if st.session_state["authentication_status"]:
     st.divider()
     st.write("Made with ❤️ for a greener future. – Friday")
 
-# --- AUTHENTICATION STATUS HANDLERS ---
+# --- AUTHENTICATION STATUS HANDLERS (for states where user is not logged in) ---
 elif st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect. Please try again or register.')
     st.divider()
@@ -625,8 +592,8 @@ elif st.session_state["authentication_status"] is False:
                     st.error("Username must be at least 3 characters and password at least 6 characters.")
                 else:
                     # Generate bcrypt hash using Authenticate's Hasher
-                    hashed_passwords = Hasher([new_password]).generate()
-                    hashed_new_password = hashed_passwords[0] # Get the first (and only) generated hash
+                    hashed_passwords_list = Hasher([new_password]).generate()
+                    hashed_new_password = hashed_passwords_list[0] 
 
                     if add_user(new_username, hashed_new_password, new_name):
                         st.success("You have successfully registered! Please log in above.")
@@ -655,8 +622,8 @@ elif st.session_state["authentication_status"] is None:
                 elif len(new_username) < 3 or len(new_password) < 6:
                     st.error("Username must be at least 3 characters and password at least 6 characters.")
                 else:
-                    hashed_passwords = Hasher([new_password]).generate()
-                    hashed_new_password = hashed_passwords[0]
+                    hashed_passwords_list = Hasher([new_password]).generate()
+                    hashed_new_password = hashed_passwords_list[0]
 
                     if add_user(new_username, hashed_new_password, new_name):
                         st.success("You have successfully registered! Please log in above.")
