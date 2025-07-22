@@ -1,0 +1,6 @@
+[theme]
+primaryColor="#2E8B57" # A professional green for buttons, sliders, etc.
+backgroundColor="#F0F2F6" # Light background for the main content area
+secondaryBackgroundColor="#E0E3EB" # Slightly darker for the sidebar and containers
+textColor="#26272F" # Darker text color for better readability
+font="sans serif"
