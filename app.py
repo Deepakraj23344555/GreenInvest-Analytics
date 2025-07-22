@@ -17,6 +17,43 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- Custom CSS for Star Buttons ---
+# This CSS makes the star buttons look like clickable icons instead of standard buttons.
+# This CSS will still apply to make the default button styling less prominent.
+st.markdown("""
+<style>
+/* Target the buttons used for the star rating specifically by looking for their parent container */
+/* This specific selector targets buttons within a horizontally laid out block (like st.columns)
+   that are likely part of the star rating. Adjust if it affects other buttons unexpectedly. */
+div[data-testid="stHorizontalBlock"] .stButton > button {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0px 5px !important; /* Adjust spacing between stars */
+    margin: 0px !important;
+    cursor: pointer; /* Ensure it looks clickable */
+    transition: transform 0.1s ease-in-out; /* Smooth hover effect */
+}
+
+div[data-testid="stHorizontalBlock"] .stButton > button:hover {
+    transform: scale(1.1); /* Slightly enlarge on hover */
+    background-color: transparent !important;
+}
+div[data-testid="stHorizontalBlock"] .stButton > button:active {
+    transform: scale(0.95); /* Slight shrink on click */
+}
+
+/* Style the star characters themselves inside these specific buttons */
+div[data-testid="stHorizontalBlock"] .stButton > button > div > p {
+    font-size: 2.5em; /* Make stars larger */
+    line-height: 1; /* Align star vertically */
+    margin: 0; /* Remove default margin */
+    padding: 0; /* Remove default padding */
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # --- DATABASE FUNCTIONS ---
 DATABASE_NAME = 'esg_data.db'
 
@@ -45,6 +82,17 @@ def init_db():
             env_data TEXT, -- Stored as JSON string
             social_data TEXT, -- Stored as JSON string
             gov_data TEXT, -- Stored as JSON string
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    # New: Create Feedback table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL, -- 1-5 star rating
+            comment TEXT,            -- Optional text feedback
+            timestamp TEXT NOT NULL,
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
@@ -101,6 +149,15 @@ def get_esg_history(user_id):
             'gov_data': json.loads(row[7]) if row[7] else None,
         })
     return parsed_history
+
+# New: Function to save user feedback
+def save_user_feedback(user_id, rating, comment):
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO feedback (user_id, rating, comment, timestamp) VALUES (?, ?, ?, ?)",
+              (user_id, rating, comment, datetime.datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
 
 # Initialize the database when the app starts
 init_db()
@@ -183,7 +240,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner", "💬 Feedback"])
 
     with tab1:
         st.subheader("Performance Breakdown & Environmental Impact")
@@ -347,6 +404,70 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                 for opp in scenario_unlocked_opportunities:
                     st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
 
+    with tab6: # Feedback Tab
+        st.header("💬 Give Us Your Feedback!")
+        st.write("Your feedback helps us improve GreenInvest Analytics.")
+
+        # Initialize feedback inputs in session state if not present
+        if 'feedback_rating' not in st.session_state:
+            st.session_state.feedback_rating = 0 # Initialize to 0 (no selection)
+        if 'feedback_comment' not in st.session_state:
+            st.session_state.feedback_comment = ""
+
+        st.subheader("Rate Your Experience")
+
+        cols = st.columns(5)
+        selected_rating = st.session_state.get('feedback_rating', 0)
+
+        # Star buttons outside of any form to allow immediate visual update on click
+        for i in range(1, 6): # Stars from 1 to 5
+            with cols[i-1]:
+                # Determine the star character (always solid '★') and its color
+                star_color = "gold" if i <= selected_rating else "lightgrey"
+                # Create the HTML for the styled star character
+                star_label_html = f"<span style='color:{star_color};'>★</span>"
+                
+                # Use st.button and pass the styled HTML.
+                # IMPORTANT: Removed unsafe_allow_html=True from st.button as it's not supported.
+                # The CSS at the top handles the button's overall appearance.
+                if st.button(star_label_html, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", unsafe_allow_html=True): # Keep for compatibility, but its effect here is indirect
+                     st.session_state.feedback_rating = i
+                     # st.experimental_rerun() is implicitly called by st.button being clicked.
+
+        # Display a clearer summary of the selected rating below the buttons
+        if selected_rating > 0:
+            # Use '★' consistently for the summary display as well
+            st.markdown(f"<h3 style='text-align: center; color: gold;'>{'★' * selected_rating}{'☆' * (5 - selected_rating)}</h3>", unsafe_allow_html=True)
+            st.write(f"You selected: **{selected_rating} Star{'s' if selected_rating != 1 else ''}**")
+        else:
+            st.write("Please click on a star to rate your experience.")
+
+
+        # Form for optional comments and final submission
+        with st.form("feedback_comment_form", clear_on_submit=True): # clear_on_submit=True to clear textarea
+            st.subheader("Optional Comments")
+            comment_input = st.text_area(
+                "What did you like or what could be improved?",
+                value=st.session_state.feedback_comment, # Pre-fill from session state
+                height=150,
+                key="feedback_textarea_input" # Unique key
+            )
+            
+            feedback_submitted = st.form_submit_button("Submit Feedback")
+
+            if feedback_submitted:
+                if st.session_state.feedback_rating > 0: # Ensure a rating is given
+                    save_user_feedback(st.session_state.user_id, st.session_state.feedback_rating, comment_input)
+                    st.success("Thank you for your valuable feedback!")
+                    # Clear the form fields after submission by resetting session state
+                    st.session_state.feedback_rating = 0 # Reset to no selection
+                    st.session_state.feedback_comment = "" # Clear comment
+
+                    # Trigger a rerun to visually clear star selection and text area
+                    st.experimental_rerun() 
+                else:
+                    st.error("Please provide a rating (click on a star) before submitting your comments.")
+
 
     st.divider() # Divider before the download button and footer
 
@@ -380,7 +501,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION SETUP ---  <--- MOVED THIS BLOCK UP!
+# --- AUTHENTICATION SETUP ---  
 # Function to get users in the format Authenticate expects
 def get_all_users_for_authenticator():
     conn = sqlite3.connect(DATABASE_NAME)
@@ -421,7 +542,7 @@ if st.session_state["authentication_status"]:
     st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
     
     # Sidebar logout button with explicit keyword arguments
-    authenticator.logout('Logout', location='sidebar') # FIX APPLIED HERE: Removed 'form_name='
+    authenticator.logout('Logout', location='sidebar') 
     
     # Welcome message and main app content
     st.title("🌿 GreenInvest Analytics")
