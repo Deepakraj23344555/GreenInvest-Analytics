@@ -48,6 +48,17 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
+    # New: Create Feedback table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            rating INTEGER NOT NULL, -- 1-5 star rating
+            comment TEXT,            -- Optional text feedback
+            timestamp TEXT NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -101,6 +112,15 @@ def get_esg_history(user_id):
             'gov_data': json.loads(row[7]) if row[7] else None,
         })
     return parsed_history
+
+# New: Function to save user feedback
+def save_user_feedback(user_id, rating, comment):
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO feedback (user_id, rating, comment, timestamp) VALUES (?, ?, ?, ?)",
+              (user_id, rating, comment, datetime.datetime.now().isoformat()))
+    conn.commit()
+    conn.close()
 
 # Initialize the database when the app starts
 init_db()
@@ -183,7 +203,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner"])
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner", "💬 Feedback"])
 
     with tab1:
         st.subheader("Performance Breakdown & Environmental Impact")
@@ -347,6 +367,51 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                 for opp in scenario_unlocked_opportunities:
                     st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
 
+    with tab6: # New: Feedback Tab
+        st.header("💬 Give Us Your Feedback!")
+        st.write("Your feedback helps us improve GreenInvest Analytics.")
+
+        # Initialize feedback inputs in session state if not present
+        if 'feedback_rating' not in st.session_state:
+            st.session_state.feedback_rating = 3
+        if 'feedback_comment' not in st.session_state:
+            st.session_state.feedback_comment = ""
+
+        with st.form("feedback_form"):
+            st.subheader("Rate Your Experience")
+            # Using a slider for 5-star rating
+            rating = st.slider(
+                "Overall Rating",
+                min_value=1,
+                max_value=5,
+                value=st.session_state.feedback_rating,
+                step=1,
+                format="⭐" * st.session_state.feedback_rating, # Visual stars
+                key="feedback_slider"
+            )
+            
+            st.subheader("Optional Comments")
+            comment = st.text_area(
+                "What did you like or what could be improved?",
+                value=st.session_state.feedback_comment,
+                height=150,
+                key="feedback_textarea"
+            )
+
+            feedback_submitted = st.form_submit_button("Submit Feedback")
+
+            if feedback_submitted:
+                if rating: # Ensure a rating is given
+                    save_user_feedback(st.session_state.user_id, rating, comment)
+                    st.success("Thank you for your valuable feedback!")
+                    # Clear the form after submission
+                    st.session_state.feedback_rating = 3 # Reset to default
+                    st.session_state.feedback_comment = "" # Clear comment
+                    # Rerun to clear the form fields visually
+                    st.experimental_rerun() 
+                else:
+                    st.error("Please provide a rating before submitting.")
+
 
     st.divider() # Divider before the download button and footer
 
@@ -366,7 +431,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         "Environmental_Impact_Estimation": calculate_environmental_impact(env_data),
         "Recommendations_Environmental": get_recommendations(e_score, s_score, g_score)['E'],
         "Recommendations_Social": get_recommendations(e_score, s_score, g_score)['S'],
-        "Recommendations_Governance": get_recommendations(e_score, s_score, g_score)['G'],
+        "Recommendations_Governance": get_recommendations(e_score, s_score, g_data)['G'], # Fixed typo: gov_data instead of g_data
         "Unlocked_Financial_Opportunities": [{"name": opp['name'], "type": opp['type'], "min_esg": opp['minimum_esg_score']} for opp in unlocked_opportunities],
         "Industry_Benchmark_Averages": INDUSTRY_AVERAGES
     }
@@ -380,7 +445,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION SETUP ---  <--- MOVED THIS BLOCK UP!
+# --- AUTHENTICATION SETUP ---  
 # Function to get users in the format Authenticate expects
 def get_all_users_for_authenticator():
     conn = sqlite3.connect(DATABASE_NAME)
