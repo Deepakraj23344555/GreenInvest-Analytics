@@ -56,23 +56,6 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-
-# -------------------- DATABASES --------------------
-# Initialize SQLite database engines
-engine = sqlalchemy.create_engine('sqlite:///sales.db')
-user_engine = sqlalchemy.create_engine('sqlite:///users.db')
-feedback_engine = sqlalchemy.create_engine('sqlite:///feedback.db')
-
-# Create 'users' table if it doesn't exist
-with user_engine.connect() as conn:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password TEXT NOT NULL
-        )
-    """))
-    conn.commit()
-
 # Create 'feedback' table if it doesn't exist
 with feedback_engine.connect() as conn:
     conn.execute(text("""
