@@ -260,7 +260,15 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
 
     # Create the tabs. Store the selected label and its index.
-    selected_tab_label = st.tabs(tab_labels, default_index=initial_tab_index, key="main_display_dashboard_tabs")
+    tabs = st.tabs(tab_labels)
+     # Optionally store the current tab manually if needed
+    with tabs[0]:
+    # Environment tab content
+    with tabs[1]:
+    # Social tab content
+    with tabs[2]:
+    # Governance tab content
+
     
     # Persist the index of the currently selected tab for next run
     st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label)
