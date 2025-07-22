@@ -29,42 +29,46 @@ st.markdown("""
             animation: fadeInUp 1s ease-out;
         }
 
-        /* Animated gradient background for the main app */
+        /* Main App Background - light eco gradient */
         .stApp {
-            background: linear-gradient(to right, #e6ffe6, #d0f0c0, #cce5ff);
+            background: linear-gradient(to right, #f0fff0, #e6f5d0, #e0f7fa);
             animation: gradient 15s ease infinite;
             background-size: 400% 400%;
+            color: #1b3a2f;
         }
+
         @keyframes gradient {
             0% {background-position: 0% 50%;}
             50% {background-position: 100% 50%;}
             100% {background-position: 0% 50%;}
         }
 
-        /* Sidebar styling with green tones */
+        /* Sidebar styling - earthy green with light text */
         section[data-testid="stSidebar"] {
-            background: linear-gradient(to bottom, #1b5e20, #2e7d32);
+            background: linear-gradient(to bottom, #2e7d32, #388e3c);
         }
         section[data-testid="stSidebar"] h1,
         section[data-testid="stSidebar"] label,
-        section[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
-            color: white !important;
+        section[data-testid="stSidebar"] .stTabs [data-baseweb="tab"],
+        section[data-testid="stSidebar"] .stTextInput label {
+            color: #ffffff !important;
         }
+
         section[data-testid="stSidebar"] .stTabs [aria-selected="true"] {
             font-weight: bold;
-            border-bottom: 2px solid #a5d6a7;
+            border-bottom: 2px solid #dcedc8;
         }
     </style>
 """, unsafe_allow_html=True)
 
-# Welcome banner at the top of the page
+# Welcome banner with high contrast
 st.markdown("""
     <div class="welcome-banner" style="text-align:center; padding: 2rem 1rem;
-            border-radius: 15px; background: linear-gradient(to right, #b9fbc0, #a0c4ff);
-            color: #004d40; font-size: 2.5rem; font-weight: bold;
+            border-radius: 15px; background: linear-gradient(to right, #a5d6a7, #81d4fa);
+            color: #003300; font-size: 2.5rem; font-weight: bold;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            box-shadow: 0 0 20px rgba(0,0,0,0.2);">
-        🌿 Welcome to <span style="color: #2e7d32;">GreenInvest Analytics</span> — Powering Sustainable Wealth 🌱
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);">
+        🌿 Welcome to <span style="color: #1b5e20;">GreenInvest Analytics</span> — Powering Sustainable Wealth 🌱
     </div>
 """, unsafe_allow_html=True)
 
