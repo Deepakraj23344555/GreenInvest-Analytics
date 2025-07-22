@@ -17,6 +17,58 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Custom CSS for animations and styling
+st.markdown("""
+    <style>
+        /* Fade-in-up animation for the welcome banner */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .welcome-banner {
+            animation: fadeInUp 1s ease-out;
+        }
+
+        /* Animated gradient background for the main app */
+        .stApp {
+            background: linear-gradient(to right, #e6ffe6, #d0f0c0, #cce5ff);
+            animation: gradient 15s ease infinite;
+            background-size: 400% 400%;
+        }
+        @keyframes gradient {
+            0% {background-position: 0% 50%;}
+            50% {background-position: 100% 50%;}
+            100% {background-position: 0% 50%;}
+        }
+
+        /* Sidebar styling with green tones */
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(to bottom, #1b5e20, #2e7d32);
+        }
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+            color: white !important;
+        }
+        section[data-testid="stSidebar"] .stTabs [aria-selected="true"] {
+            font-weight: bold;
+            border-bottom: 2px solid #a5d6a7;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Welcome banner at the top of the page
+st.markdown("""
+    <div class="welcome-banner" style="text-align:center; padding: 2rem 1rem;
+            border-radius: 15px; background: linear-gradient(to right, #b9fbc0, #a0c4ff);
+            color: #004d40; font-size: 2.5rem; font-weight: bold;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);">
+        🌿 Welcome to <span style="color: #2e7d32;">GreenInvest Analytics</span> — Powering Sustainable Wealth 🌱
+    </div>
+""", unsafe_allow_html=True)
+
+
 # --- DATABASE FUNCTIONS ---
 DATABASE_NAME = 'esg_data.db'
 
