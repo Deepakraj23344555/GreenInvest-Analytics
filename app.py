@@ -653,7 +653,7 @@ if st.session_state["authentication_status"]:
             st.info("Upload a CSV file using the sidebar to see your ESG analysis.")
 
     st.divider()
-    st.write("Made with ❤️ for a greener future. – Friday")
+    st.write("Made with ❤️ for a greener future. – GreenInvest Analytics")
 
 # --- AUTHENTICATION STATUS HANDLERS (for states where user is not logged in) ---
 elif st.session_state["authentication_status"] is False:
