@@ -247,20 +247,23 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         st.session_state.force_feedback_tab_active = False # Reset the flag
     else:
         # Otherwise, try to restore the last selected tab from session state, or default to first
-        # Ensure it's always an integer, defensive programming
-        initial_tab_index = int(st.session_state.get('last_display_dashboard_tab_index', 0))
+        # Robust check to ensure initial_tab_index is always an integer
+        stored_index = st.session_state.get('last_display_dashboard_tab_index', 0)
+        if isinstance(stored_index, int):
+            initial_tab_index = stored_index
+        else:
+            # If it's not an integer, reset it to 0 and ensure a valid default
+            initial_tab_index = 0
+            st.session_state['last_display_dashboard_tab_index'] = 0 # Clear potentially bad state
+            # Optionally, log a warning here if you had a logging setup
+            # st.warning("Session state tab index corrupted; resetting to default tab.")
+
 
     # Create the tabs. Store the selected label and its index.
     selected_tab_label = st.tabs(tab_labels, default_index=initial_tab_index, key="main_display_dashboard_tabs")
     
-    # Print for debugging (you can remove this line after the issue is resolved)
-    # st.write(f"DEBUG: Initial Tab Index: {initial_tab_index}, Type: {type(initial_tab_index)}")
-    # st.write(f"DEBUG: Selected Tab Label: {selected_tab_label}")
-    # st.write(f"DEBUG: last_display_dashboard_tab_index before update: {st.session_state.get('last_display_dashboard_tab_index')}")
-
     # Persist the index of the currently selected tab for next run
     st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label)
-    # st.write(f"DEBUG: last_display_dashboard_tab_index AFTER update: {st.session_state.last_display_dashboard_tab_index}")
 
 
     # --- Tab Content Rendering ---
@@ -445,10 +448,10 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         for i in range(1, 6): # Stars from 1 to 5
             with cols[i-1]:
                 # Determine the star emoji for the button label
-                # These are standard emojis. No unsafe_allow_html=True needed here.
+                # These are standard emojis. unsafe_allow_html is NOT needed for st.button.
                 star_emoji_display = "⭐" if i <= selected_rating else "☆" 
                 
-                # Removed unsafe_allow_html=True from st.button
+                # Removed unsafe_allow_html=True from st.button - this was the cause of the TypeError.
                 if st.button(star_emoji_display, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", use_container_width=True):
                     st.session_state.feedback_rating = i
                     # Set flag to force Feedback tab active on next rerun
