@@ -6,6 +6,7 @@ import json
 import sqlite3
 import datetime
 import sqlalchemy
+from sqlalchemy import text
 
 # Set up DB engine
 feedback_engine = sqlalchemy.create_engine("sqlite:///feedback.db")
