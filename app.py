@@ -421,7 +421,7 @@ if st.session_state["authentication_status"]:
     st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
     
     # Sidebar logout button with explicit keyword arguments
-    authenticator.logout(form_name='Logout', location='sidebar')
+    authenticator.logout('Logout', location='sidebar') # FIX APPLIED HERE: Removed 'form_name='
     
     # Welcome message and main app content
     st.title("🌿 GreenInvest Analytics")
