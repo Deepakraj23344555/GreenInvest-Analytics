@@ -107,6 +107,17 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Create 'feedback' table if it doesn't exist
+with feedback_engine.connect() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS feedback (
+            username TEXT,
+            message TEXT,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.commit()
+
 # Modified to accept bcrypt hashed password
 def add_user(username, password_hash, name):
     conn = sqlite3.connect(DATABASE_NAME)
@@ -157,6 +168,15 @@ def get_esg_history(user_id):
             'gov_data': json.loads(row[7]) if row[7] else None,
         })
     return parsed_history
+
+def save_feedback(username, message):
+    """Saves user feedback to the database."""
+    with feedback_engine.connect() as conn:
+        conn.execute(
+            text("INSERT INTO feedback (username, message) VALUES (:u, :m)"),
+            {"u": username, "m": message}
+        )
+        conn.commit()
 
 # Initialize the database when the app starts
 init_db()
