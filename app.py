@@ -194,33 +194,3 @@ else: # CSV Upload
 
 st.markdown("---")
 st.write("Made with ❤️ for a greener future.")
-
-def show_home():
-    st.markdown("## 🏡 Welcome to GreenInvest Analytics!")
-    st.write("Smart Investing, Sustainable Future 🌱")
-
-def show_optimizer():
-    st.markdown("## 📈 Portfolio Optimization")
-    st.write("Optimize your portfolio here...")
-
-def show_trends():
-    st.markdown("## 🌿 ESG Trends")
-    st.write("ESG trends and charts go here...")
-
-def show_reports():
-    st.markdown("## 🧾 Reports")
-    st.write("Export or review your reports here...")
-
-# In app.py
-st.sidebar.title("Navigation")
-section = st.sidebar.radio("Go to", ["Home", "Portfolio Optimization", "ESG Trends", "Reports"])
-
-if section == "Home":
-    show_home()
-elif section == "Portfolio Optimization":
-    show_optimizer()
-elif section == "ESG Trends":
-    show_trends()
-elif section == "Reports":
-    show_reports()
-
