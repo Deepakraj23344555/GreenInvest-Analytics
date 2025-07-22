@@ -4,8 +4,10 @@ import plotly.graph_objects as go
 import time
 import json
 import sqlite3
-import hashlib # For additional manual hashing if needed, though authenticator handles it
-import datetime # For timestamps
+import datetime
+
+# Import Authenticate and Hasher from streamlit_authenticator
+from streamlit_authenticator import Authenticate, Hasher 
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -22,6 +24,7 @@ def init_db():
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
     # Create users table
+    # password_hash will now store bcrypt hashes
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,6 +52,7 @@ def init_db():
     conn.commit()
     conn.close()
 
+# Modified to accept bcrypt hashed password
 def add_user(username, password_hash, name):
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
@@ -62,13 +66,13 @@ def add_user(username, password_hash, name):
     finally:
         conn.close()
 
-def get_user(username):
+def get_user_id(username):
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
-    c.execute("SELECT id, username, password_hash, name FROM users WHERE username = ?", (username,))
-    user = c.fetchone()
+    c.execute("SELECT id FROM users WHERE username = ?", (username,))
+    user_id = c.fetchone()
     conn.close()
-    return user
+    return user_id[0] if user_id else None
 
 def save_esg_history(user_id, timestamp, overall, e, s, g, env_data, social_data, gov_data):
     conn = sqlite3.connect(DATABASE_NAME)
@@ -85,7 +89,6 @@ def get_esg_history(user_id):
     history_data = c.fetchall()
     conn.close()
     
-    # Convert data back from JSON strings
     parsed_history = []
     for row in history_data:
         parsed_history.append({
@@ -103,7 +106,7 @@ def get_esg_history(user_id):
 # Initialize the database when the app starts
 init_db()
 
-# --- MOCK DATABASE & HELPER FUNCTIONS (unchanged) ---
+# --- MOCK DATABASE & HELPER FUNCTIONS (unchanged logic) ---
 FINANCE_OPPORTUNITIES = [
     {"name": "GreenStart Grant Program", "type": "Grant", "description": "A grant for businesses starting their sustainability journey. Covers up to 50% of the cost for an initial energy audit.", "minimum_esg_score": 0, "icon": "🌱", "url": "https://www.sba.gov/funding-programs/grants"},
     {"name": "Eco-Efficiency Business Loan", "type": "Loan", "description": "Low-interest loans for SMEs investing in energy-efficient equipment or renewable energy installations.", "minimum_esg_score": 60, "icon": "💡", "url": "https://www.bankofamerica.com/smallbusiness/business-financing/"},
@@ -295,7 +298,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         
         if current_data is None:
             st.warning("Please calculate your initial ESG score first to populate the scenario planner. This uses your last entered data.")
-            # Provide default values if no data is available yet
+            # Provide default values if no data is available yet for initial load
             default_env = {'energy': 50000, 'water': 2500, 'waste': 1000, 'recycling': 40}
             default_social = {'turnover': 15, 'incidents': 3, 'diversity': 30}
             default_gov = {'independence': 50, 'ethics': 85}
@@ -349,8 +352,6 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     st.divider() # Divider before the download button and footer
 
     # Export Report
-    # Pass all relevant data to display_dashboard to ensure it's available for report generation
-    # if st.session_state.current_esg_input_data is not None: # Ensure data exists to generate report
     report_data = {
         "User": st.session_state.username,
         "Report_Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -380,10 +381,9 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION ---
-import streamlit_authenticator as st_auth
+# --- AUTHENTICATION SETUP ---
 
-# Retrieve existing users from DB for authenticator
+# Function to get users in the format Authenticate expects
 def get_all_users_for_authenticator():
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
@@ -391,35 +391,41 @@ def get_all_users_for_authenticator():
     users_data = c.fetchall()
     conn.close()
     
-    names = [row[0] for row in users_data]
-    usernames = [row[1] for row in users_data]
-    hashed_passwords = [row[2] for row in users_data]
-    
-    return names, usernames, hashed_passwords
+    # Authenticator expects a dictionary structure for credentials
+    credentials = {"usernames": {}}
+    for row in users_data:
+        name, username, password_hash = row
+        credentials["usernames"][username] = {
+            "name": name,
+            "password": password_hash # This is the bcrypt hash from DB
+        }
+    return credentials
 
-names, usernames, hashed_passwords = get_all_users_for_authenticator()
+# Get credentials from database
+credentials = get_all_users_for_authenticator()
 
 # Initialize authenticator
-authenticator = st_auth.Authenticate(
-    names,
-    usernames,
-    hashed_passwords,
+authenticator = Authenticate(
+    credentials,
     'greeninvest_cookie', # cookie name
-    'abcdef', # cookie key (should be complex and secret!)
+    'abcdefgh', # cookie key (MUST be a long, strong, secret string for production!)
     cookie_expiry_days=30
 )
 
-# --- Main App Logic (Conditional based on authentication) ---
+# --- Main App Logic (Conditional based on authentication status) ---
+# Call the login method
 name, authentication_status, username = authenticator.login('Login', 'main')
 
 if st.session_state["authentication_status"]:
+    # User is authenticated
     st.session_state.username = username # Store username in session state
-    user_data = get_user(username)
-    st.session_state.user_id = user_data[0] # Store user_id
-    st.session_state.name = user_data[3] # Store user's given name
-
+    st.session_state.name = name # Store user's display name
+    st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
+    
+    # Sidebar logout button
     authenticator.logout('Logout', 'sidebar')
     
+    # Welcome message and main app content
     st.title("🌿 GreenInvest Analytics")
     st.markdown(f"Welcome back, **{st.session_state.name}**! Analyze and improve your ESG performance to unlock green finance opportunities.")
     
@@ -444,55 +450,70 @@ if st.session_state["authentication_status"]:
     # --- Display input fields based on user's choice ---
     if input_method == "Manual Input":
         st.sidebar.header("Step 2: Input Your Data")
+        # Initialize last input data for pre-filling, fetching from DB for current user if available
+        if 'last_env_input' not in st.session_state:
+            # Try to pre-fill from the last historical record of the current user
+            latest_record = get_esg_history(st.session_state.user_id)
+            if latest_record:
+                latest_data = latest_record[-1] # Get the very last entry
+                st.session_state.last_env_input = latest_data['env_data']
+                st.session_state.last_social_input = latest_data['social_data']
+                st.session_state.last_gov_input = latest_data['gov_data']
+            else:
+                # Fallback to default values if no history
+                st.session_state.last_env_input = {'energy': 50000, 'water': 2500, 'waste': 1000, 'recycling': 40}
+                st.session_state.last_social_input = {'turnover': 15, 'incidents': 3, 'diversity': 30}
+                st.session_state.last_gov_input = {'independence': 50, 'ethics': 85}
+
         with st.sidebar.expander("🌳 Environmental", expanded=True):
             energy_consumption = st.number_input(
                 "Annual Energy Consumption (kWh)",
                 min_value=0,
-                value=st.session_state.get('last_env_input', {}).get('energy', 50000), # Populate from last input if available
+                value=st.session_state.last_env_input['energy'], # Use session state
                 help="Total electricity, natural gas, and other fuel consumption in kilowatt-hours (kWh) over the past year."
             )
             water_usage = st.number_input(
                 "Annual Water Usage (cubic meters)",
                 min_value=0,
-                value=st.session_state.get('last_env_input', {}).get('water', 2500),
+                value=st.session_state.last_env_input['water'],
                 help="Total water consumed in cubic meters (m³) over the past year."
             )
             waste_generation = st.number_input(
                 "Annual Waste Generated (kg)",
                 min_value=0,
-                value=st.session_state.get('last_env_input', {}).get('waste', 1000),
+                value=st.session_state.last_env_input['waste'],
                 help="Total solid waste generated in kilograms (kg) annually."
             )
             recycling_rate = st.slider(
                 "Recycling Rate (%)",
-                min_value=0, max_value=100, value=st.session_state.get('last_env_input', {}).get('recycling', 40),
+                min_value=0, max_value=100, value=st.session_state.last_env_input['recycling'],
                 help="Percentage of total waste that is recycled."
             )
         with st.sidebar.expander("❤️ Social", expanded=True):
             employee_turnover = st.slider(
                 "Employee Turnover Rate (%)",
-                min_value=0, max_value=100, value=st.session_state.get('last_social_input', {}).get('turnover', 15),
+                min_value=0, max_value=100, value=st.session_state.last_social_input['turnover'],
                 help="Percentage of employees leaving the company annually."
             )
             safety_incidents = st.number_input(
                 "Number of Safety Incidents",
-                min_value=0, value=st.session_state.get('last_social_input', {}).get('incidents', 3),
+                min_value=0, value=st.session_state.last_social_input['incidents'],
                 help="Total number of reported workplace safety incidents annually."
             )
             diversity_ratio = st.slider(
                 "Management Diversity (%)",
-                min_value=0, max_value=100, value=st.session_state.get('last_social_input', {}).get('diversity', 30),
+                min_value=0, max_value=100, value=st.session_state.last_social_input['diversity'],
                 help="Percentage of management positions held by individuals from diverse backgrounds."
             )
         with st.sidebar.expander("⚖️ Governance", expanded=True):
             board_independence = st.slider(
                 "Board Independence (%)",
-                min_value=0, max_value=100, value=st.session_state.get('last_gov_input', {}).get('independence', 50),
+                min_value=0, max_value=100, value=st.session_state.last_gov_input['independence'],
                 help="Percentage of independent directors on your company's board."
             )
             ethics_training = st.slider(
                 "Ethics Training Completion (%)",
-                min_value=0, max_value=100, value=st.session_state.get('last_gov_input', {}).get('ethics', 85),
+                min_value=0, max_value=100, value=st.session_state.last_gov_input['ethics'],
                 help="Percentage of employees who have completed ethics training annually."
             )
         
@@ -503,15 +524,11 @@ if st.session_state["authentication_status"]:
             
             final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
             
-            # Save current input data to session state for scenario planner
-            st.session_state.current_esg_input_data = {
-                'env': env_data, 'social': social_data, 'gov': gov_data
-            }
-            # Save inputs to session state for pre-filling manual fields next time
+            # Save current input data to session state for scenario planner and pre-filling
+            st.session_state.current_esg_input_data = {'env': env_data, 'social': social_data, 'gov': gov_data}
             st.session_state.last_env_input = env_data
             st.session_state.last_social_input = social_data
             st.session_state.last_gov_input = gov_data
-
 
             # Save to database
             save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
@@ -538,11 +555,8 @@ if st.session_state["authentication_status"]:
             with st.spinner('Processing your data...'): # Loading spinner
                 try:
                     data_df = pd.read_csv(uploaded_file)
-                    # Convert the two-column format to a dictionary
-                    # Use .get with default 0 to handle potential missing keys gracefully
                     data_dict = pd.Series(data_df.value.values, index=data_df.metric).to_dict()
 
-                    # Extract data
                     env_data = {
                         'energy': data_dict.get('energy_consumption_kwh', 0),
                         'water': data_dict.get('water_usage_m3', 0),
@@ -561,18 +575,14 @@ if st.session_state["authentication_status"]:
                     
                     st.sidebar.success("File uploaded and processed successfully!")
                     
-                    # Calculate and display
                     final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
 
-                    # Store current input data to session state for scenario planner
-                    st.session_state.current_esg_input_data = {
-                        'env': env_data, 'social': social_data, 'gov': gov_data
-                    }
-                    # Save inputs to session state for pre-filling manual fields next time
+                    # Save current input data to session state for scenario planner and pre-filling
+                    st.session_state.current_esg_input_data = {'env': env_data, 'social': social_data, 'gov': gov_data}
                     st.session_state.last_env_input = env_data
                     st.session_state.last_social_input = social_data
                     st.session_state.last_gov_input = gov_data
-
+                    
                     # Save to database
                     save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
                                      final_score, e_score, s_score, g_score,
@@ -592,6 +602,7 @@ if st.session_state["authentication_status"]:
     st.divider()
     st.write("Made with ❤️ for a greener future. – Friday")
 
+# --- AUTHENTICATION STATUS HANDLERS ---
 elif st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect. Please try again or register.')
     st.divider()
@@ -613,8 +624,10 @@ elif st.session_state["authentication_status"] is False:
                 elif len(new_username) < 3 or len(new_password) < 6:
                     st.error("Username must be at least 3 characters and password at least 6 characters.")
                 else:
-                    # Hash password before storing
-                    hashed_new_password = hashlib.sha256(new_password.encode()).hexdigest()
+                    # Generate bcrypt hash using Authenticate's Hasher
+                    hashed_passwords = Hasher([new_password]).generate()
+                    hashed_new_password = hashed_passwords[0] # Get the first (and only) generated hash
+
                     if add_user(new_username, hashed_new_password, new_name):
                         st.success("You have successfully registered! Please log in above.")
                     else:
@@ -625,7 +638,7 @@ elif st.session_state["authentication_status"] is None:
     st.info('Please log in or register to access the GreenInvest Analytics platform.')
     st.divider()
     
-    # Registration form
+    # Registration form (for initial state)
     with st.expander("New User? Register Here", expanded=True):
         st.subheader("Register for GreenInvest Analytics")
         with st.form("register_form_initial"): # Unique key for this form
@@ -642,7 +655,9 @@ elif st.session_state["authentication_status"] is None:
                 elif len(new_username) < 3 or len(new_password) < 6:
                     st.error("Username must be at least 3 characters and password at least 6 characters.")
                 else:
-                    hashed_new_password = hashlib.sha256(new_password.encode()).hexdigest()
+                    hashed_passwords = Hasher([new_password]).generate()
+                    hashed_new_password = hashed_passwords[0]
+
                     if add_user(new_username, hashed_new_password, new_name):
                         st.success("You have successfully registered! Please log in above.")
                     else:
