@@ -373,44 +373,56 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
         # Initialize feedback inputs in session state if not present
         if 'feedback_rating' not in st.session_state:
-            st.session_state.feedback_rating = 3
+            st.session_state.feedback_rating = 0 # Initialize to 0 (no selection)
         if 'feedback_comment' not in st.session_state:
             st.session_state.feedback_comment = ""
 
-        with st.form("feedback_form"):
-            st.subheader("Rate Your Experience")
-            # Using a slider for 5-star rating
-            rating = st.slider(
-                "Overall Rating",
-                min_value=1,
-                max_value=5,
-                value=st.session_state.feedback_rating,
-                step=1,
-                format="⭐" * st.session_state.feedback_rating, # Visual stars
-                key="feedback_slider"
+        st.subheader("Rate Your Experience")
+
+        cols = st.columns(5)
+        selected_rating = st.session_state.get('feedback_rating', 0)
+
+        for i in range(1, 6): # Stars from 1 to 5
+            with cols[i-1]:
+                # Conditionally render filled or outlined star emoji
+                star_display = "⭐" if i <= selected_rating else "☆"
+
+                # Use a button for each star. Clicking updates the session state and causes a rerun.
+                if st.button(star_display, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", use_container_width=True):
+                    st.session_state.feedback_rating = i
+                    # st.experimental_rerun() is implicitly called by st.button being clicked.
+
+        # Display a clearer summary of the selected rating below the buttons
+        if selected_rating > 0:
+            st.markdown(f"<h3 style='text-align: center; color: gold;'>{'★' * selected_rating}{'☆' * (5 - selected_rating)}</h3>", unsafe_allow_html=True)
+            st.write(f"You selected: **{selected_rating} Star{'s' if selected_rating != 1 else ''}**")
+        else:
+            st.write("Please click on a star to rate your experience.")
+
+
+        # Form for optional comments and final submission
+        with st.form("feedback_comment_form"):
+            st.subheader("Optional Comments")
+            comment_input = st.text_area(
+                "What did you like or what could be improved?",
+                value=st.session_state.feedback_comment, # Pre-fill from session state
+                height=150,
+                key="feedback_textarea_input" # Unique key
             )
             
-            st.subheader("Optional Comments")
-            comment = st.text_area(
-                "What did you like or what could be improved?",
-                value=st.session_state.feedback_comment,
-                height=150,
-                key="feedback_textarea"
-            )
-
             feedback_submitted = st.form_submit_button("Submit Feedback")
 
             if feedback_submitted:
-                if rating: # Ensure a rating is given
-                    save_user_feedback(st.session_state.user_id, rating, comment)
+                if st.session_state.feedback_rating > 0: # Ensure a rating is given
+                    save_user_feedback(st.session_state.user_id, st.session_state.feedback_rating, comment_input)
                     st.success("Thank you for your valuable feedback!")
-                    # Clear the form after submission
-                    st.session_state.feedback_rating = 3 # Reset to default
+                    # Clear the form fields after submission by resetting session state and rerunning
+                    st.session_state.feedback_rating = 0 # Reset to no selection
                     st.session_state.feedback_comment = "" # Clear comment
-                    # Rerun to clear the form fields visually
+                    # This reruns the app to visually clear the form inputs
                     st.experimental_rerun() 
                 else:
-                    st.error("Please provide a rating before submitting.")
+                    st.error("Please provide a rating (click on a star) before submitting your comments.")
 
 
     st.divider() # Divider before the download button and footer
@@ -431,7 +443,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         "Environmental_Impact_Estimation": calculate_environmental_impact(env_data),
         "Recommendations_Environmental": get_recommendations(e_score, s_score, g_score)['E'],
         "Recommendations_Social": get_recommendations(e_score, s_score, g_score)['S'],
-        "Recommendations_Governance": get_recommendations(e_score, s_score, g_data)['G'], # Fixed typo: gov_data instead of g_data
+        "Recommendations_Governance": get_recommendations(e_score, s_score, g_score)['G'],
         "Unlocked_Financial_Opportunities": [{"name": opp['name'], "type": opp['type'], "min_esg": opp['minimum_esg_score']} for opp in unlocked_opportunities],
         "Industry_Benchmark_Averages": INDUSTRY_AVERAGES
     }
