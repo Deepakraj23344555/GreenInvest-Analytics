@@ -380,7 +380,37 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION STATUS HANDLERS ---
+# --- AUTHENTICATION SETUP ---  <--- MOVED THIS BLOCK UP!
+# Function to get users in the format Authenticate expects
+def get_all_users_for_authenticator():
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("SELECT name, username, password_hash FROM users")
+    users_data = c.fetchall()
+    conn.close()
+    
+    # Authenticator expects a dictionary structure for credentials
+    credentials = {"usernames": {}}
+    for row in users_data:
+        name, username, password_hash = row
+        credentials["usernames"][username] = {
+            "name": name,
+            "password": password_hash # This is the bcrypt hash from DB
+        }
+    return credentials
+
+# Get credentials from database
+credentials = get_all_users_for_authenticator()
+
+# Initialize authenticator
+authenticator = Authenticate(
+    credentials,
+    'greeninvest_cookie', # cookie name
+    'abcdefgh', # cookie key (MUST be a long, strong, secret string for production!)
+    cookie_expiry_days=30
+)
+
+# --- Main App Logic (Conditional based on authentication status) ---
 # Call the login method with explicit keyword arguments
 name, authentication_status, username = authenticator.login(form_name='Login', location='main')
 
