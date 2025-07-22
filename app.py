@@ -45,6 +45,8 @@ def get_financial_opportunities(esg_score):
 # --- Function to display the full dashboard ---
 def display_dashboard(final_score, e_score, s_score, g_score):
     st.header("Your ESG Performance Dashboard")
+
+    # Animated Overall Score (Original placement)
     overall_score_placeholder = st.empty()
     time.sleep(0.5)
     for i in range(int(final_score) + 1):
@@ -52,25 +54,45 @@ def display_dashboard(final_score, e_score, s_score, g_score):
         time.sleep(0.02)
     overall_score_placeholder.metric(label="Overall ESG Score", value=f"{final_score:.1f}", delta="out of 100")
 
+    st.divider() # New: Clean separator
+
     tab1, tab2, tab3 = st.tabs(["📊 Dashboard Breakdown", "🎯 Recommendations", "💰 Finance Marketplace"])
+
     with tab1:
-        # ... (charting code remains the same)
         st.subheader("Performance Overview")
+
+        # New: Metric Cards for E, S, G scores
+        col_e_card, col_s_card, col_g_card = st.columns(3)
+        with col_e_card:
+            with st.container(border=True):
+                st.metric("🌳 Environmental", f"{e_score:.1f}")
+        with col_s_card:
+            with st.container(border=True):
+                st.metric("❤️ Social", f"{s_score:.1f}")
+        with col_g_card:
+            with st.container(border=True):
+                st.metric("⚖️ Governance", f"{g_score:.1f}")
+
+        st.divider() # New: Separator before charts
+
         col1, col2 = st.columns(2)
         with col1:
             fig_spider = go.Figure()
-            fig_spider.add_trace(go.Scatterpolar(r=[e_score, s_score, g_score, e_score], theta=['Environmental', 'Social', 'Governance', 'Environmental'], fill='toself', name='Your Score', line_color='green'))
+            fig_spider.add_trace(go.Scatterpolar(r=[e_score, s_score, g_score, e_score], theta=['Environmental', 'Social', 'Governance', 'Environmental'], fill='toself', name='Your Score', line_color=st.get_option('theme.primaryColor'))) # Use theme color
             fig_spider.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])), showlegend=False, title="ESG Balanced Scorecard", height=350)
             st.plotly_chart(fig_spider, use_container_width=True)
         with col2:
-            fig_bar = go.Figure(go.Bar(x=[e_score, s_score, g_score], y=['Environmental', 'Social', 'Governance'], orientation='h', marker_color=['#2E8B57', '#6B8E23', '#8FBC8F']))
+            # Modified: More vibrant greens for bar chart
+            fig_bar = go.Figure(go.Bar(x=[e_score, s_score, g_score], y=['Environmental', 'Social', 'Governance'], orientation='h',
+                                       marker_color=['#4CAF50', '#8BC34A', '#CDDC39']))
             fig_bar.update_layout(title="Score Breakdown", xaxis_title="Score (out of 100)", height=350)
             st.plotly_chart(fig_bar, use_container_width=True)
+
         if final_score > 85:
             st.balloons()
-            st.success("Congratulations! Your high ESG score is outstanding and unlocks premium opportunities.")
+            st.success("Congratulations! Your high ESG score is outstanding and unlocks premium opportunities. Keep up the great work!")
+
     with tab2:
-        # ... (recommendations code remains the same)
         st.header("Actionable Recommendations")
         recommendations = get_recommendations(e_score, s_score, g_score)
         with st.container(border=True):
@@ -82,8 +104,8 @@ def display_dashboard(final_score, e_score, s_score, g_score):
         with st.container(border=True):
             st.subheader("⚖️ Governance")
             for rec in recommendations['G']: st.markdown(f"- {rec}")
+
     with tab3:
-        # ... (marketplace code remains the same)
         st.header("Your Green Finance Marketplace")
         st.write(f"Based on your ESG score of **{final_score:.1f}**, you have unlocked the following opportunities.")
         unlocked_opportunities = get_financial_opportunities(final_score)
@@ -95,7 +117,7 @@ def display_dashboard(final_score, e_score, s_score, g_score):
                     st.subheader(f"{opp['icon']} {opp['name']}")
                     st.write(f"**Type:** {opp['type']} | **Minimum ESG Score:** {opp['minimum_esg_score']}")
                     st.write(opp['description'])
-                    st.link_button("Apply Now", opp['url'])
+                    st.link_button(f"Apply Now {opp['icon']}", opp['url']) # Modified: Added icon to button
 
 # --- UI ---
 st.title("🌿 GreenInvest Analytics")
@@ -103,6 +125,7 @@ st.markdown("An interactive tool for SMEs to measure, improve, and report on the
 
 # --- Sidebar ---
 st.sidebar.header("Step 1: Choose Input Method")
+st.sidebar.divider() # New: Divider
 input_method = st.sidebar.radio("Select how you want to provide data:", ("Manual Input", "Upload CSV File"))
 
 # --- Create a sample CSV for download ---
@@ -157,40 +180,40 @@ else: # CSV Upload
     )
 
     if uploaded_file is not None:
-        try:
-            data_df = pd.read_csv(uploaded_file)
-            # Convert the two-column format to a dictionary
-            data_dict = pd.Series(data_df.value.values, index=data_df.metric).to_dict()
+        with st.spinner('Processing your data...'): # New: Loading spinner
+            try:
+                data_df = pd.read_csv(uploaded_file)
+                # Convert the two-column format to a dictionary
+                data_dict = pd.Series(data_df.value.values, index=data_df.metric).to_dict()
 
-            # Extract data
-            env_data = {
-                'energy': data_dict['energy_consumption_kwh'],
-                'water': data_dict['water_usage_m3'],
-                'waste': data_dict['waste_generation_kg'],
-                'recycling': data_dict['recycling_rate_pct']
-            }
-            social_data = {
-                'turnover': data_dict['employee_turnover_pct'],
-                'incidents': data_dict['safety_incidents_count'],
-                'diversity': data_dict['management_diversity_pct']
-            }
-            gov_data = {
-                'independence': data_dict['board_independence_pct'],
-                'ethics': data_dict['ethics_training_pct']
-            }
-            
-            st.sidebar.success("File uploaded and processed successfully!")
-            
-            # Calculate and display
-            final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
-            display_dashboard(final_score, e_score, s_score, g_score)
+                # Extract data
+                env_data = {
+                    'energy': data_dict['energy_consumption_kwh'],
+                    'water': data_dict['water_usage_m3'],
+                    'waste': data_dict['waste_generation_kg'],
+                    'recycling': data_dict['recycling_rate_pct']
+                }
+                social_data = {
+                    'turnover': data_dict['employee_turnover_pct'],
+                    'incidents': data_dict['safety_incidents_count'],
+                    'diversity': data_dict['management_diversity_pct']
+                }
+                gov_data = {
+                    'independence': data_dict['board_independence_pct'],
+                    'ethics': data_dict['ethics_training_pct']
+                }
+                
+                st.sidebar.success("File uploaded and processed successfully!")
+                
+                # Calculate and display
+                final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
+                display_dashboard(final_score, e_score, s_score, g_score)
 
-        except Exception as e:
-            st.error(f"An error occurred processing the file: {e}")
-            st.warning("Please make sure your CSV file follows the format of the template.")
+            except Exception as e:
+                st.error(f"An error occurred processing the file: {e}")
+                st.warning("Please make sure your CSV file follows the format of the template.")
     else:
         st.info("Upload a CSV file using the sidebar to see your ESG analysis.")
 
-
-st.markdown("---")
+st.divider() # New: Divider
 st.write("Made with ❤️ for a greener future.")
