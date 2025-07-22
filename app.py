@@ -3,13 +3,86 @@ import pandas as pd
 import plotly.graph_objects as go
 import time
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="GreenInvest Analytics",
-    page_icon="🌿",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# -------------------- PAGE CONFIG --------------------
+# Set the page configuration for the Streamlit app
+st.set_page_config(page_title="Retail Sales Dashboard", layout="wide")
+
+# Custom CSS for animations and styling
+st.markdown("""
+    <style>
+        /* Fade-in-up animation for the welcome banner */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .welcome-banner {
+            animation: fadeInUp 1s ease-out;
+        }
+        /* Animated gradient background for the main app */
+        .stApp {
+            background: linear-gradient(to right, #c4fda1, #c2e9fb, #cfa1fd);
+            animation: gradient 15s ease infinite;
+            background-size: 400% 400%;
+        }
+        @keyframes gradient {
+            0% {background-position: 0% 50%;}
+            50% {background-position: 100% 50%;}
+            100% {background-position: 0% 50%;}
+        }
+        /* Sidebar styling */
+        section[data-testid="stSidebar"] {
+            background: linear-gradient(to bottom, #1e3c72, #2a5298);
+        }
+        section[data-testid="stSidebar"] h1,
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] .stTabs [data-baseweb="tab"] {
+            color: white !important;
+        }
+        section[data-testid="stSidebar"] .stTabs [aria-selected="true"] {
+            font-weight: bold;
+            border-bottom: 2px solid #f0b90b;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
+# Welcome banner at the top of the page
+st.markdown("""
+    <div class="welcome-banner" style="text-align:center; padding: 2rem 1rem;
+            border-radius: 15px; background: linear-gradient(to right, #89f7fe, #66a6ff);
+            color: #ffffff; font-size: 2.5rem; font-weight: bold;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);">
+        🚀 Welcome to the <span style="color: #ffdf00;">✨ SalesPulse</span>!
+    </div>
+""", unsafe_allow_html=True)
+
+
+# -------------------- DATABASES --------------------
+# Initialize SQLite database engines
+engine = sqlalchemy.create_engine('sqlite:///sales.db')
+user_engine = sqlalchemy.create_engine('sqlite:///users.db')
+feedback_engine = sqlalchemy.create_engine('sqlite:///feedback.db')
+
+# Create 'users' table if it doesn't exist
+with user_engine.connect() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT PRIMARY KEY,
+            password TEXT NOT NULL
+        )
+    """))
+    conn.commit()
+
+# Create 'feedback' table if it doesn't exist
+with feedback_engine.connect() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS feedback (
+            username TEXT,
+            message TEXT,
+            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """))
+    conn.commit()
 
 # -------------------- AUTH HELPERS --------------------
 def hash_password(password):
