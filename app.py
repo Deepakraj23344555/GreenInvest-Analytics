@@ -57,6 +57,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Create 'feedback' table if it doesn't exist
+from sqlalchemy import create_engine
+
+feedback_engine = create_engine('sqlite:///feedback.db')
+
 with feedback_engine.connect() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS feedback (
