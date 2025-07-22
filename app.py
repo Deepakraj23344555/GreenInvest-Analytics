@@ -17,41 +17,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Custom CSS for Star Buttons ---
-# This CSS makes the star buttons look like clickable icons instead of standard buttons.
-# This CSS will still apply to make the default button styling less prominent.
-st.markdown("""
-<style>
-/* Target the buttons used for the star rating specifically by looking for their parent container */
-div[data-testid="stHorizontalBlock"] .stButton > button {
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0px 5px !important; /* Adjust spacing between stars */
-    margin: 0px !important;
-    cursor: pointer; /* Ensure it looks clickable */
-    transition: transform 0.1s ease-in-out; /* Smooth hover effect */
-}
-
-div[data-testid="stHorizontalBlock"] .stButton > button:hover {
-    transform: scale(1.1); /* Slightly enlarge on hover */
-    background-color: transparent !important;
-}
-div[data-testid="stHorizontalBlock"] .stButton > button:active {
-    transform: scale(0.95); /* Slight shrink on click */
-}
-
-/* Style the star characters themselves inside these specific buttons */
-div[data-testid="stHorizontalBlock"] .stButton > button > div > p {
-    font-size: 2.5em; /* Make stars larger */
-    line-height: 1; /* Align star vertically */
-    margin: 0; /* Remove default margin */
-    padding: 0; /* Remove default padding */
-}
-</style>
-""", unsafe_allow_html=True)
-
-
 # --- DATABASE FUNCTIONS ---
 DATABASE_NAME = 'esg_data.db'
 
@@ -83,7 +48,6 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
-    # Removed: Create Feedback table
     conn.commit()
     conn.close()
 
@@ -110,32 +74,14 @@ def get_user_id(username):
     return user_id[0] if user_id else None
 
 def save_esg_history(user_id, timestamp, overall, e, s, g, env_data, social_data, gov_data):
-    # Added defensive check for user_id
-    if user_id is None:
-        st.error("Error: Cannot save history. User ID is missing or invalid. Please try logging in again.")
-        # print(f"DEBUG: Attempted to save history with user_id=None at {timestamp}") # For server logs
-        return
-
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
-    try:
-        c.execute("INSERT INTO esg_history (user_id, timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                  (user_id, timestamp, overall, e, s, g, json.dumps(env_data), json.dumps(social_data), json.dumps(gov_data)))
-        conn.commit()
-    except sqlite3.IntegrityError as e:
-        st.error(f"Database error: Could not save ESG history. Details: {e}")
-        # print(f"DEBUG: IntegrityError saving history for user_id {user_id}: {e}") # For server logs
-    except Exception as e:
-        st.error(f"An unexpected error occurred while saving ESG history: {e}")
-        # print(f"DEBUG: Unexpected error saving history for user_id {user_id}: {e}") # For server logs
-    finally:
-        conn.close()
+    c.execute("INSERT INTO esg_history (user_id, timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              (user_id, timestamp, overall, e, s, g, json.dumps(env_data), json.dumps(social_data), json.dumps(gov_data)))
+    conn.commit()
+    conn.close()
 
 def get_esg_history(user_id):
-    # Added defensive check for user_id
-    if user_id is None:
-        return [] # Return empty list if user_id is invalid
-
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
     c.execute("SELECT timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data FROM esg_history WHERE user_id = ? ORDER BY timestamp ASC", (user_id,))
@@ -155,8 +101,6 @@ def get_esg_history(user_id):
             'gov_data': json.loads(row[7]) if row[7] else None,
         })
     return parsed_history
-
-# Removed: Function to save user feedback (save_user_feedback)
 
 # Initialize the database when the app starts
 init_db()
@@ -239,23 +183,9 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
     st.divider()
 
-    # --- Tab Management ---
-    # Removed "💬 Feedback" from tab_labels
-    tab_labels = ["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner"]
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner"])
 
-    # Determine which tab should be active after this rerun
-    # Removed 'force_feedback_tab_active' logic as feedback tab is gone
-    initial_tab_index = int(st.session_state.get('last_display_dashboard_tab_index', 0))
-
-    # Create the tabs. Store the selected label and its index.
-    selected_tab_label = st.tabs(tab_labels, default_index=initial_tab_index, key="main_display_dashboard_tabs")
-    
-    # Persist the index of the currently selected tab for next run
-    st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label)
-
-
-    # --- Tab Content Rendering (all using if/elif based on selected_tab_label) ---
-    if selected_tab_label == "📊 Performance Overview":
+    with tab1:
         st.subheader("Performance Breakdown & Environmental Impact")
 
         # Metric Cards for E, S, G scores
@@ -307,7 +237,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.balloons()
             st.success("Congratulations! Your high ESG score is outstanding and unlocks premium opportunities. Keep up the great work, KD!")
 
-    elif selected_tab_label == "🎯 Recommendations":
+    with tab2:
         st.header("Actionable Recommendations")
         recommendations = get_recommendations(e_score, s_score, g_score)
         with st.container(border=True):
@@ -320,7 +250,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.subheader("⚖️ Governance")
             for rec in recommendations['G']: st.markdown(f"- {rec}")
 
-    elif selected_tab_label == "💰 Finance Marketplace":
+    with tab3:
         st.header("Your Green Finance Marketplace")
         st.write(f"Based on your ESG score of **{final_score:.1f}**, you have unlocked the following opportunities.")
         unlocked_opportunities = get_financial_opportunities(final_score)
@@ -332,9 +262,9 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                     st.subheader(f"{opp['icon']} {opp['name']}")
                     st.write(f"**Type:** {opp['type']} | **Minimum ESG Score:** {opp['minimum_esg_score']}")
                     st.write(opp['description'])
-                    st.link_button(f"Apply Now {opp['icon']}", opp['url']) # FIX APPLIED HERE: Removed extra '}'
+                    st.link_button(f"Apply Now {opp['icon']}", opp['url'])
 
-    elif selected_tab_label == "🕰️ Historical Trends":
+    with tab4: # Historical Trends Tab
         st.header("🕰️ Your ESG Performance History")
         history = get_esg_history(current_user_id)
         if not history:
@@ -359,7 +289,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.subheader("Raw Historical Data")
             st.dataframe(history_df[['timestamp', 'overall_score', 'e_score', 's_score', 'g_score']].set_index('timestamp').sort_index(ascending=False))
 
-    elif selected_tab_label == "🧪 Scenario Planner":
+    with tab5: # Scenario Planner Tab
         st.header("🧪 Scenario Planner: What If...?")
         st.write("Adjust the metrics below to see how your ESG score and opportunities would change.")
 
@@ -450,7 +380,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION SETUP ---  
+# --- AUTHENTICATION SETUP ---  <--- MOVED THIS BLOCK UP!
 # Function to get users in the format Authenticate expects
 def get_all_users_for_authenticator():
     conn = sqlite3.connect(DATABASE_NAME)
@@ -491,7 +421,7 @@ if st.session_state["authentication_status"]:
     st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
     
     # Sidebar logout button with explicit keyword arguments
-    authenticator.logout('Logout', location='sidebar') 
+    authenticator.logout('Logout', location='sidebar') # FIX APPLIED HERE: Removed 'form_name='
     
     # Welcome message and main app content
     st.title("🌿 GreenInvest Analytics")
