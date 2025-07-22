@@ -17,39 +17,12 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Custom CSS for Star Buttons ---
-# This CSS makes the star buttons look like clickable icons instead of standard buttons.
-# This CSS will still apply to make the default button styling less prominent.
+# --- Custom CSS (Empty for now as star CSS is removed with feedback) ---
+# The CSS for star buttons is removed along with the feedback feature.
+# If you add other custom CSS later, you can place it here.
 st.markdown("""
 <style>
-/* Target the buttons used for the star rating specifically by looking for their parent container */
-/* This specific selector targets buttons within a horizontally laid out block (like st.columns)
-   that are likely part of the star rating. Adjust if it affects other buttons unexpectedly. */
-div[data-testid="stHorizontalBlock"] .stButton > button {
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0px 5px !important; /* Adjust spacing between stars */
-    margin: 0px !important;
-    cursor: pointer; /* Ensure it looks clickable */
-    transition: transform 0.1s ease-in-out; /* Smooth hover effect */
-}
-
-div[data-testid="stHorizontalBlock"] .stButton > button:hover {
-    transform: scale(1.1); /* Slightly enlarge on hover */
-    background-color: transparent !important;
-}
-div[data-testid="stHorizontalBlock"] .stButton > button:active {
-    transform: scale(0.95); /* Slight shrink on click */
-}
-
-/* Style the star characters themselves inside these specific buttons */
-div[data-testid="stHorizontalBlock"] .stButton > button > div > p {
-    font-size: 2.5em; /* Make stars larger */
-    line-height: 1; /* Align star vertically */
-    margin: 0; /* Remove default margin */
-    padding: 0; /* Remove default padding */
-}
+/* Add any other global CSS styles here if needed in the future */
 </style>
 """, unsafe_allow_html=True)
 
@@ -85,17 +58,7 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (id)
         )
     ''')
-    # New: Create Feedback table
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER NOT NULL,
-            rating INTEGER NOT NULL, -- 1-5 star rating
-            comment TEXT,            -- Optional text feedback
-            timestamp TEXT NOT NULL,
-            FOREIGN KEY (user_id) REFERENCES users (id)
-        )
-    ''')
+    # Removed: Create Feedback table
     conn.commit()
     conn.close()
 
@@ -122,14 +85,32 @@ def get_user_id(username):
     return user_id[0] if user_id else None
 
 def save_esg_history(user_id, timestamp, overall, e, s, g, env_data, social_data, gov_data):
+    # Added defensive check for user_id
+    if user_id is None:
+        st.error("Error: Cannot save history. User ID is missing or invalid. Please try logging in again.")
+        # print(f"DEBUG: Attempted to save history with user_id=None at {timestamp}") # For server logs
+        return
+
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
-    c.execute("INSERT INTO esg_history (user_id, timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-              (user_id, timestamp, overall, e, s, g, json.dumps(env_data), json.dumps(social_data), json.dumps(gov_data)))
-    conn.commit()
-    conn.close()
+    try:
+        c.execute("INSERT INTO esg_history (user_id, timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  (user_id, timestamp, overall, e, s, g, json.dumps(env_data), json.dumps(social_data), json.dumps(gov_data)))
+        conn.commit()
+    except sqlite3.IntegrityError as e:
+        st.error(f"Database error: Could not save ESG history. Details: {e}")
+        # print(f"DEBUG: IntegrityError saving history for user_id {user_id}: {e}") # For server logs
+    except Exception as e:
+        st.error(f"An unexpected error occurred while saving ESG history: {e}")
+        # print(f"DEBUG: Unexpected error saving history for user_id {user_id}: {e}") # For server logs
+    finally:
+        conn.close()
 
 def get_esg_history(user_id):
+    # Added defensive check for user_id
+    if user_id is None:
+        return [] # Return empty list if user_id is invalid
+
     conn = sqlite3.connect(DATABASE_NAME)
     c = conn.cursor()
     c.execute("SELECT timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data FROM esg_history WHERE user_id = ? ORDER BY timestamp ASC", (user_id,))
@@ -150,14 +131,7 @@ def get_esg_history(user_id):
         })
     return parsed_history
 
-# New: Function to save user feedback
-def save_user_feedback(user_id, rating, comment):
-    conn = sqlite3.connect(DATABASE_NAME)
-    c = conn.cursor()
-    c.execute("INSERT INTO feedback (user_id, rating, comment, timestamp) VALUES (?, ?, ?, ?)",
-              (user_id, rating, comment, datetime.datetime.now().isoformat()))
-    conn.commit()
-    conn.close()
+# Removed: Function to save user feedback (save_user_feedback)
 
 # Initialize the database when the app starts
 init_db()
@@ -240,9 +214,22 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner", "💬 Feedback"])
+    # --- Tab Management ---
+    # Removed "💬 Feedback" from tab_labels
+    tab_labels = ["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner"]
 
-    with tab1:
+    # Removed 'force_feedback_tab_active' logic as feedback tab is gone
+    initial_tab_index = int(st.session_state.get('last_display_dashboard_tab_index', 0))
+
+    # Create the tabs. Store the selected label and its index.
+    selected_tab_label = st.tabs(tab_labels, default_index=initial_tab_index, key="main_display_dashboard_tabs")
+    
+    # Persist the index of the currently selected tab for next run
+    st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label)
+
+
+    # --- Tab Content Rendering (all using if/elif based on selected_tab_label) ---
+    if selected_tab_label == "📊 Performance Overview":
         st.subheader("Performance Breakdown & Environmental Impact")
 
         # Metric Cards for E, S, G scores
@@ -294,7 +281,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.balloons()
             st.success("Congratulations! Your high ESG score is outstanding and unlocks premium opportunities. Keep up the great work, KD!")
 
-    with tab2:
+    elif selected_tab_label == "🎯 Recommendations":
         st.header("Actionable Recommendations")
         recommendations = get_recommendations(e_score, s_score, g_score)
         with st.container(border=True):
@@ -307,7 +294,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.subheader("⚖️ Governance")
             for rec in recommendations['G']: st.markdown(f"- {rec}")
 
-    with tab3:
+    elif selected_tab_label == "💰 Finance Marketplace":
         st.header("Your Green Finance Marketplace")
         st.write(f"Based on your ESG score of **{final_score:.1f}**, you have unlocked the following opportunities.")
         unlocked_opportunities = get_financial_opportunities(final_score)
@@ -319,9 +306,9 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                     st.subheader(f"{opp['icon']} {opp['name']}")
                     st.write(f"**Type:** {opp['type']} | **Minimum ESG Score:** {opp['minimum_esg_score']}")
                     st.write(opp['description'])
-                    st.link_button(f"Apply Now {opp['icon']}", opp['url'])
+                    st.link_button(f"Apply Now {opp['icon']}", opp['url']}")
 
-    with tab4: # Historical Trends Tab
+    elif selected_tab_label == "🕰️ Historical Trends":
         st.header("🕰️ Your ESG Performance History")
         history = get_esg_history(current_user_id)
         if not history:
@@ -346,7 +333,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.subheader("Raw Historical Data")
             st.dataframe(history_df[['timestamp', 'overall_score', 'e_score', 's_score', 'g_score']].set_index('timestamp').sort_index(ascending=False))
 
-    with tab5: # Scenario Planner Tab
+    elif selected_tab_label == "🧪 Scenario Planner":
         st.header("🧪 Scenario Planner: What If...?")
         st.write("Adjust the metrics below to see how your ESG score and opportunities would change.")
 
@@ -403,70 +390,6 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             else:
                 for opp in scenario_unlocked_opportunities:
                     st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
-
-    with tab6: # Feedback Tab
-        st.header("💬 Give Us Your Feedback!")
-        st.write("Your feedback helps us improve GreenInvest Analytics.")
-
-        # Initialize feedback inputs in session state if not present
-        if 'feedback_rating' not in st.session_state:
-            st.session_state.feedback_rating = 0 # Initialize to 0 (no selection)
-        if 'feedback_comment' not in st.session_state:
-            st.session_state.feedback_comment = ""
-
-        st.subheader("Rate Your Experience")
-
-        cols = st.columns(5)
-        selected_rating = st.session_state.get('feedback_rating', 0)
-
-        # Star buttons outside of any form to allow immediate visual update on click
-        for i in range(1, 6): # Stars from 1 to 5
-            with cols[i-1]:
-                # Determine the star character (always solid '★') and its color
-                star_color = "gold" if i <= selected_rating else "lightgrey"
-                # Create the HTML for the styled star character
-                star_label_html = f"<span style='color:{star_color};'>★</span>"
-                
-                # Use st.button and pass the styled HTML.
-                # IMPORTANT: Removed unsafe_allow_html=True from st.button as it's not supported.
-                # The CSS at the top handles the button's overall appearance.
-                if st.button(star_label_html, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", unsafe_allow_html=True): # Keep for compatibility, but its effect here is indirect
-                     st.session_state.feedback_rating = i
-                     # st.experimental_rerun() is implicitly called by st.button being clicked.
-
-        # Display a clearer summary of the selected rating below the buttons
-        if selected_rating > 0:
-            # Use '★' consistently for the summary display as well
-            st.markdown(f"<h3 style='text-align: center; color: gold;'>{'★' * selected_rating}{'☆' * (5 - selected_rating)}</h3>", unsafe_allow_html=True)
-            st.write(f"You selected: **{selected_rating} Star{'s' if selected_rating != 1 else ''}**")
-        else:
-            st.write("Please click on a star to rate your experience.")
-
-
-        # Form for optional comments and final submission
-        with st.form("feedback_comment_form", clear_on_submit=True): # clear_on_submit=True to clear textarea
-            st.subheader("Optional Comments")
-            comment_input = st.text_area(
-                "What did you like or what could be improved?",
-                value=st.session_state.feedback_comment, # Pre-fill from session state
-                height=150,
-                key="feedback_textarea_input" # Unique key
-            )
-            
-            feedback_submitted = st.form_submit_button("Submit Feedback")
-
-            if feedback_submitted:
-                if st.session_state.feedback_rating > 0: # Ensure a rating is given
-                    save_user_feedback(st.session_state.user_id, st.session_state.feedback_rating, comment_input)
-                    st.success("Thank you for your valuable feedback!")
-                    # Clear the form fields after submission by resetting session state
-                    st.session_state.feedback_rating = 0 # Reset to no selection
-                    st.session_state.feedback_comment = "" # Clear comment
-
-                    # Trigger a rerun to visually clear star selection and text area
-                    st.experimental_rerun() 
-                else:
-                    st.error("Please provide a rating (click on a star) before submitting your comments.")
 
 
     st.divider() # Divider before the download button and footer
