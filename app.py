@@ -11,6 +11,38 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# -------------------- AUTH HELPERS --------------------
+def hash_password(password):
+    """Hashes a password using SHA256."""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def verify_user(username, password):
+    """Verifies user credentials against the database."""
+    df = pd.read_sql("SELECT * FROM users WHERE username = ?", user_engine, params=(username,))
+    return not df.empty and df['password'][0] == hash_password(password)
+
+def register_user(username, password):
+    """Registers a new user if the username doesn't already exist."""
+    df = pd.read_sql("SELECT * FROM users WHERE username = ?", user_engine, params=(username,))
+    if not df.empty:
+        return False
+    with user_engine.connect() as conn:
+        conn.execute(
+            text("INSERT INTO users (username, password) VALUES (:u, :p)"),
+            {"u": username, "p": hash_password(password)}
+        )
+        conn.commit()
+    return True
+
+def save_feedback(username, message):
+    """Saves user feedback to the database."""
+    with feedback_engine.connect() as conn:
+        conn.execute(
+            text("INSERT INTO feedback (username, message) VALUES (:u, :m)"),
+            {"u": username, "m": message}
+        )
+        conn.commit()
+
 # --- MOCK DATABASE & HELPER FUNCTIONS (No changes here) ---
 FINANCE_OPPORTUNITIES = [
     {"name": "GreenStart Grant Program", "type": "Grant", "description": "A grant for businesses starting their sustainability journey. Covers up to 50% of the cost for an initial energy audit.", "minimum_esg_score": 0, "icon": "🌱", "url": "https://www.sba.gov/funding-programs/grants"},
