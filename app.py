@@ -105,6 +105,38 @@ def save_feedback(username, message):
         )
         conn.commit()
 
+# -------------------- SESSION SETUP --------------------
+if 'auth' not in st.session_state:
+    st.session_state.auth = False
+if 'user' not in st.session_state:
+    st.session_state.user = ""
+
+
+# -------------------- AUTH UI --------------------
+if not st.session_state.auth:
+    st.sidebar.title("👤 User Login")
+    tab1, tab2 = st.sidebar.tabs(["Login", "Register"])
+    with tab1:
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
+        if st.button("Login"):
+            if verify_user(username, password):
+                st.session_state.auth = True
+                st.session_state.user = username
+                st.success("✔️ Login successful!")
+                st.rerun()
+            else:
+                st.error("✖️ Invalid credentials.")
+    with tab2:
+        new_user = st.text_input("New Username")
+        new_pass = st.text_input("New Password", type="password")
+        if st.button("Register"):
+            if register_user(new_user, new_pass):
+                st.success("✔️ Registration successful! You can now log in.")
+            else:
+                st.error("✖️ Username already exists.")
+    st.stop()
+
 # --- MOCK DATABASE & HELPER FUNCTIONS (No changes here) ---
 FINANCE_OPPORTUNITIES = [
     {"name": "GreenStart Grant Program", "type": "Grant", "description": "A grant for businesses starting their sustainability journey. Covers up to 50% of the cost for an initial energy audit.", "minimum_esg_score": 0, "icon": "🌱", "url": "https://www.sba.gov/funding-programs/grants"},
