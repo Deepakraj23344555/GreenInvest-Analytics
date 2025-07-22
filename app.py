@@ -225,8 +225,43 @@ def calculate_environmental_impact(env_data):
     }
 
 # --- Function to display the full dashboard ---
-def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, current_user_id):
-    st.header(f"Your ESG Performance Dashboard, {st.session_state.name}!") # Personalized welcome
+def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, user_id):
+    st.title("GreenInvest ESG Dashboard")
+    st.markdown(f"Welcome, **User ID: {user_id}**")
+
+    st.markdown("## 🧮 ESG Scores Overview")
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Final ESG Score", f"{final_score:.2f}")
+    col2.metric("Environmental Score", f"{e_score:.2f}")
+    col3.metric("Social Score", f"{s_score:.2f}")
+    col4.metric("Governance Score", f"{g_score:.2f}")
+
+    st.markdown("---")
+
+    # Create tab layout
+    tabs = st.tabs(["🌿 Environment", "👥 Social", "🏛️ Governance"])
+
+    with tabs[0]:
+        st.subheader("🌿 Environmental Factors")
+        if env_data is not None:
+            st.dataframe(env_data)
+        else:
+            st.warning("No environmental data available.")
+
+    with tabs[1]:
+        st.subheader("👥 Social Factors")
+        if social_data is not None:
+            st.dataframe(social_data)
+        else:
+            st.warning("No social data available.")
+
+    with tabs[2]:
+        st.subheader("🏛️ Governance Factors")
+        if gov_data is not None:
+            st.dataframe(gov_data)
+        else:
+            st.warning("No governance data available.")
+
 
     # Animated Overall Score
     overall_score_placeholder = st.empty()
