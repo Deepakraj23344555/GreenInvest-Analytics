@@ -17,12 +17,37 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Custom CSS (Empty for now as star CSS is removed with feedback) ---
-# The CSS for star buttons is removed along with the feedback feature.
-# If you add other custom CSS later, you can place it here.
+# --- Custom CSS for Star Buttons ---
+# This CSS makes the star buttons look like clickable icons instead of standard buttons.
+# This CSS will still apply to make the default button styling less prominent.
 st.markdown("""
 <style>
-/* Add any other global CSS styles here if needed in the future */
+/* Target the buttons used for the star rating specifically by looking for their parent container */
+div[data-testid="stHorizontalBlock"] .stButton > button {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0px 5px !important; /* Adjust spacing between stars */
+    margin: 0px !important;
+    cursor: pointer; /* Ensure it looks clickable */
+    transition: transform 0.1s ease-in-out; /* Smooth hover effect */
+}
+
+div[data-testid="stHorizontalBlock"] .stButton > button:hover {
+    transform: scale(1.1); /* Slightly enlarge on hover */
+    background-color: transparent !important;
+}
+div[data-testid="stHorizontalBlock"] .stButton > button:active {
+    transform: scale(0.95); /* Slight shrink on click */
+}
+
+/* Style the star characters themselves inside these specific buttons */
+div[data-testid="stHorizontalBlock"] .stButton > button > div > p {
+    font-size: 2.5em; /* Make stars larger */
+    line-height: 1; /* Align star vertically */
+    margin: 0; /* Remove default margin */
+    padding: 0; /* Remove default padding */
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -218,6 +243,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     # Removed "💬 Feedback" from tab_labels
     tab_labels = ["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner"]
 
+    # Determine which tab should be active after this rerun
     # Removed 'force_feedback_tab_active' logic as feedback tab is gone
     initial_tab_index = int(st.session_state.get('last_display_dashboard_tab_index', 0))
 
@@ -306,7 +332,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                     st.subheader(f"{opp['icon']} {opp['name']}")
                     st.write(f"**Type:** {opp['type']} | **Minimum ESG Score:** {opp['minimum_esg_score']}")
                     st.write(opp['description'])
-                    st.link_button(f"Apply Now {opp['icon']}", opp['url']}")
+                    st.link_button(f"Apply Now {opp['icon']}", opp['url']) # FIX APPLIED HERE: Removed extra '}'
 
     elif selected_tab_label == "🕰️ Historical Trends":
         st.header("🕰️ Your ESG Performance History")
