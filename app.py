@@ -1,4 +1,5 @@
 from sqlalchemy import create_engine
+from sqlalchemy import text
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
