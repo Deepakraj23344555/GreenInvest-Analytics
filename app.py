@@ -1,108 +1,15 @@
 import streamlit as st
-import sqlite3
 import pandas as pd
-from sqlalchemy import create_engine, text
+import plotly.graph_objects as go
+import time
 
-# --- Setup ---
-st.set_page_config(page_title="GreenInvest ESG Analytics", layout="wide")
-st.markdown("## 🔐 GreenInvest ESG Analytics")
-
-# --- DB Setup ---
-engine = create_engine("sqlite:///users.db", echo=False)
-with engine.connect() as conn:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT PRIMARY KEY,
-            password TEXT
-        )
-    """))
-
-# --- Session State Init ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "username" not in st.session_state:
-    st.session_state.username = ""
-
-# --- Helper Functions ---
-def register_user(username, password):
-    with engine.connect() as conn:
-        df = pd.read_sql("SELECT * FROM users WHERE username = ?", conn, params=(username,))
-        if not df.empty:
-            return False  # Username already exists
-        conn.execute(text("INSERT INTO users (username, password) VALUES (:u, :p)"), {"u": username, "p": password})
-    return True
-
-def login_user(username, password):
-    with engine.connect() as conn:
-        df = pd.read_sql("SELECT * FROM users WHERE username = ? AND password = ?", conn, params=(username, password))
-        return not df.empty
-
-# --- Login/Signup UI ---
-auth_option = st.selectbox("Login / Signup", ["Login", "Signup"])
-
-if not st.session_state.logged_in:
-    if auth_option == "Login":
-        st.subheader("Login")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if login_user(username, password):
-                st.session_state.logged_in = True
-                st.session_state.username = username
-                st.success("✅ Logged in successfully.")
-                st.rerun()
-            else:
-                st.error("❌ Invalid username or password.")
-    elif auth_option == "Signup":
-        st.subheader("Signup")
-        new_user = st.text_input("New Username")
-        new_pass = st.text_input("New Password", type="password")
-        if st.button("Register"):
-            if register_user(new_user, new_pass):
-                st.success("✅ Registration successful! Please login.")
-                st.rerun()
-            else:
-                st.warning("⚠️ Username already exists. Try a different one.")
-
-# --- ESG Analysis Section (Only After Login) ---
-if st.session_state.logged_in:
-    st.markdown("## 🌿 GreenInvest Analytics")
-    st.markdown("An interactive tool for SMEs to measure, improve, and report on their ESG performance to unlock green finance opportunities.")
-
-    # Input selection
-    input_method = st.sidebar.radio("Step 1: Choose Input Method", ["Manual Input", "Upload CSV File"])
-
-    if input_method == "Manual Input":
-        st.sidebar.subheader("Step 2: Input Your Data")
-        st.sidebar.markdown("🌳 **Environmental**")
-        energy = st.sidebar.number_input("Annual Energy Consumption (kWh)", value=50000)
-        water = st.sidebar.number_input("Annual Water Usage (cubic meters)", value=2500)
-        waste = st.sidebar.number_input("Annual Waste Generated (kg)", value=1000)
-        recycle = st.sidebar.slider("Recycling Rate (%)", 0, 100, 40)
-
-        # Example calculation
-        if st.button("Calculate ESG Score"):
-            env_score = (100 - (energy / 1000 + water / 100 + waste / 10 - recycle)) / 2
-            env_score = max(min(env_score, 100), 0)
-            st.metric("🌿 ESG Environmental Score", f"{env_score:.2f}/100")
-
-    elif input_method == "Upload CSV File":
-        uploaded_file = st.sidebar.file_uploader("Upload your ESG CSV file", type=["csv"])
-        if uploaded_file:
-            df = pd.read_csv(uploaded_file)
-            st.write("### Uploaded ESG Data", df)
-            if "energy" in df.columns and "water" in df.columns and "waste" in df.columns and "recycle" in df.columns:
-                score = (100 - (df["energy"].mean()/1000 + df["water"].mean()/100 + df["waste"].mean()/10 - df["recycle"].mean())) / 2
-                score = max(min(score, 100), 0)
-                st.metric("🌿 ESG Environmental Score", f"{score:.2f}/100")
-            else:
-                st.warning("CSV must contain `energy`, `water`, `waste`, and `recycle` columns.")
-
-    # Logout
-    if st.button("Logout"):
-        st.session_state.logged_in = False
-        st.session_state.username = ""
-        st.rerun()
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="GreenInvest Analytics",
+    page_icon="🌿",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # --- MOCK DATABASE & HELPER FUNCTIONS (No changes here) ---
 FINANCE_OPPORTUNITIES = [
