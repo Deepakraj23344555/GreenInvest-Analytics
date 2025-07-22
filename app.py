@@ -750,4 +750,41 @@ elif st.session_state["authentication_status"] is None:
                         st.success("You have successfully registered! Please log in above.")
                     else:
                         st.error("Username already exists. Please choose a different one.")
-    st.write("Made with ❤️ for a greener future. – Friday")
+    st.write("Made with ❤️ for a greener future. – GreenInvest Analytics")
+
+# -------------------- ADMIN PANEL PAGE --------------------
+elif choice == "Admin Panel":
+    st.subheader("Admin Panel")
+    if st.session_state.user != "admin":
+        st.warning("⛔ You are not authorized to view this page.")
+    else:
+        admin_tab1, admin_tab2 = st.tabs(["Feedback", "Users"])
+        
+        with admin_tab1:
+            st.markdown("### All Feedback")
+            try:
+                feedback_df = pd.read_sql("SELECT * FROM feedback ORDER BY submitted_at DESC", feedback_engine)
+                if feedback_df.empty:
+                    st.info("No feedback submitted yet.")
+                else:
+                    feedback_df['rating'] = feedback_df['message'].str.extract(r'Rating:\s*(\d+)').astype(float)
+                    avg_rating = feedback_df['rating'].mean()
+                    
+                    st.metric("Average Rating", f"{avg_rating:.2f} 🌟")
+                    
+                    rating_counts = feedback_df['rating'].value_counts().sort_index()
+                    st.bar_chart(rating_counts)
+                    
+                    with st.expander("View All Feedback Entries"):
+                        st.dataframe(feedback_df)
+            except Exception as e:
+                st.error(f"Could not load feedback: {e}")
+
+        with admin_tab2:
+            st.markdown("### Registered Users")
+            try:
+                users_df = pd.read_sql("SELECT username FROM users", user_engine)
+                st.metric("Total Users Registered", f"{users_df.shape[0]}")
+                st.dataframe(users_df)
+            except Exception as e:
+                st.error(f"Could not load users: {e}")
