@@ -105,37 +105,93 @@ def save_feedback(username, message):
         )
         conn.commit()
 
-# -------------------- SESSION SETUP --------------------
-if 'auth' not in st.session_state:
-    st.session_state.auth = False
-if 'user' not in st.session_state:
-    st.session_state.user = ""
+import streamlit as st
+import pandas as pd
+from sqlalchemy import create_engine, text
 
+# Setup database engines
+user_engine = create_engine('sqlite:///users.db')
+feedback_engine = create_engine('sqlite:///feedback.db')
 
-# -------------------- AUTH UI --------------------
-if not st.session_state.auth:
-    st.sidebar.title("👤 User Login")
-    tab1, tab2 = st.sidebar.tabs(["Login", "Register"])
-    with tab1:
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
-        if st.button("Login"):
-            if verify_user(username, password):
-                st.session_state.auth = True
-                st.session_state.user = username
-                st.success("✔️ Login successful!")
-                st.rerun()
-            else:
-                st.error("✖️ Invalid credentials.")
-    with tab2:
-        new_user = st.text_input("New Username")
-        new_pass = st.text_input("New Password", type="password")
-        if st.button("Register"):
-            if register_user(new_user, new_pass):
-                st.success("✔️ Registration successful! You can now log in.")
-            else:
-                st.error("✖️ Username already exists.")
-    st.stop()
+# Create necessary tables
+with user_engine.connect() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT
+        );
+    """))
+
+with feedback_engine.connect() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
+            message TEXT
+        );
+    """))
+
+# User registration
+def register_user(username, password):
+    df = pd.read_sql("SELECT * FROM users WHERE username = ?", user_engine, params=(username,))
+    if not df.empty:
+        return False  # Username already exists
+    with user_engine.connect() as conn:
+        conn.execute(text("INSERT INTO users (username, password) VALUES (:u, :p)"),
+                     {"u": username, "p": password})
+    return True
+
+# User login
+def login_user(username, password):
+    df = pd.read_sql("SELECT * FROM users WHERE username = ? AND password = ?",
+                     user_engine, params=(username, password))
+    return not df.empty
+
+# Feedback submission
+def submit_feedback(name, message):
+    with feedback_engine.connect() as conn:
+        conn.execute(text("INSERT INTO feedback (name, message) VALUES (:n, :m)"),
+                     {"n": name, "m": message})
+
+# Streamlit UI
+st.set_page_config(page_title="GreenInvest Analytics", layout="centered")
+
+st.title("🌱 GreenInvest Analytics")
+
+menu = st.sidebar.selectbox("Menu", ["Login", "Sign Up", "Feedback"])
+
+if menu == "Login":
+    st.subheader("Login to Your Account")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        if login_user(username, password):
+            st.success(f"Welcome, {username}!")
+        else:
+            st.error("Invalid username or password")
+
+elif menu == "Sign Up":
+    st.subheader("Create a New Account")
+    new_user = st.text_input("New Username")
+    new_pass = st.text_input("New Password", type="password")
+    if st.button("Sign Up"):
+        if register_user(new_user, new_pass):
+            st.success("Account created successfully. You can now log in.")
+        else:
+            st.warning("Username already exists. Try a different one.")
+
+elif menu == "Feedback":
+    st.subheader("We'd Love Your Feedback 💬")
+    name = st.text_input("Your Name")
+    message = st.text_area("Your Message")
+    if st.button("Submit Feedback"):
+        if name and message:
+            submit_feedback(name, message)
+            st.success("Thank you for your feedback!")
+        else:
+            st.warning("Please enter both name and message.")
+
 
 # --- MOCK DATABASE & HELPER FUNCTIONS (No changes here) ---
 FINANCE_OPPORTUNITIES = [
