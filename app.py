@@ -2,7 +2,10 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import time
-import json # For JSON export
+import json
+import sqlite3
+import hashlib # For additional manual hashing if needed, though authenticator handles it
+import datetime # For timestamps
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -12,7 +15,95 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- MOCK DATABASE & HELPER FUNCTIONS ---
+# --- DATABASE FUNCTIONS ---
+DATABASE_NAME = 'esg_data.db'
+
+def init_db():
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    # Create users table
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            name TEXT
+        )
+    ''')
+    # Create ESG history table, linked to users
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS esg_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            timestamp TEXT NOT NULL,
+            overall_score REAL,
+            e_score REAL,
+            s_score REAL,
+            g_score REAL,
+            env_data TEXT, -- Stored as JSON string
+            social_data TEXT, -- Stored as JSON string
+            gov_data TEXT, -- Stored as JSON string
+            FOREIGN KEY (user_id) REFERENCES users (id)
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def add_user(username, password_hash, name):
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    try:
+        c.execute("INSERT INTO users (username, password_hash, name) VALUES (?, ?, ?)",
+                  (username, password_hash, name))
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False # Username already exists
+    finally:
+        conn.close()
+
+def get_user(username):
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("SELECT id, username, password_hash, name FROM users WHERE username = ?", (username,))
+    user = c.fetchone()
+    conn.close()
+    return user
+
+def save_esg_history(user_id, timestamp, overall, e, s, g, env_data, social_data, gov_data):
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("INSERT INTO esg_history (user_id, timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              (user_id, timestamp, overall, e, s, g, json.dumps(env_data), json.dumps(social_data), json.dumps(gov_data)))
+    conn.commit()
+    conn.close()
+
+def get_esg_history(user_id):
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("SELECT timestamp, overall_score, e_score, s_score, g_score, env_data, social_data, gov_data FROM esg_history WHERE user_id = ? ORDER BY timestamp ASC", (user_id,))
+    history_data = c.fetchall()
+    conn.close()
+    
+    # Convert data back from JSON strings
+    parsed_history = []
+    for row in history_data:
+        parsed_history.append({
+            'timestamp': pd.to_datetime(row[0]),
+            'overall_score': row[1],
+            'e_score': row[2],
+            's_score': row[3],
+            'g_score': row[4],
+            'env_data': json.loads(row[5]) if row[5] else None,
+            'social_data': json.loads(row[6]) if row[6] else None,
+            'gov_data': json.loads(row[7]) if row[7] else None,
+        })
+    return parsed_history
+
+# Initialize the database when the app starts
+init_db()
+
+# --- MOCK DATABASE & HELPER FUNCTIONS (unchanged) ---
 FINANCE_OPPORTUNITIES = [
     {"name": "GreenStart Grant Program", "type": "Grant", "description": "A grant for businesses starting their sustainability journey. Covers up to 50% of the cost for an initial energy audit.", "minimum_esg_score": 0, "icon": "🌱", "url": "https://www.sba.gov/funding-programs/grants"},
     {"name": "Eco-Efficiency Business Loan", "type": "Loan", "description": "Low-interest loans for SMEs investing in energy-efficient equipment or renewable energy installations.", "minimum_esg_score": 60, "icon": "💡", "url": "https://www.bankofamerica.com/smallbusiness/business-financing/"},
@@ -21,7 +112,6 @@ FINANCE_OPPORTUNITIES = [
     {"name": "Impact Investors Alliance - Premier Partner", "type": "Private Equity", "description": "For top-tier ESG performers. Provides significant growth capital and access to a global network of sustainable businesses.", "minimum_esg_score": 90, "icon": "🏆", "url": "https://thegiin.org/"}
 ]
 
-# Mock Industry Benchmark Data (for benchmarking feature)
 INDUSTRY_AVERAGES = {
     'Environmental': 70,
     'Social': 65,
@@ -29,7 +119,6 @@ INDUSTRY_AVERAGES = {
     'Overall ESG': 70
 }
 
-# CO2 Emission Factors (Simplified for demonstration)
 CO2_EMISSION_FACTORS = {
     'energy_kwh_to_co2': 0.4, # kg CO2e per kWh (avg grid mix)
     'water_m3_to_co2': 0.1,  # kg CO2e per m3 water (from treatment/supply)
@@ -38,20 +127,9 @@ CO2_EMISSION_FACTORS = {
 
 def calculate_esg_score(env_data, social_data, gov_data):
     weights = {'E': 0.4, 'S': 0.3, 'G': 0.3}
-    # Environmental Score: Higher is better. Normalizing and averaging.
-    e_score = (max(0, 100 - (env_data['energy'] / 1000)) + # Lower energy is better
-               max(0, 100 - (env_data['water'] / 500)) +   # Lower water is better
-               max(0, 100 - (env_data['waste'] / 100)) +    # Lower waste is better
-               env_data['recycling']) / 4                    # Higher recycling is better
-
-    # Social Score: Higher is better.
-    s_score = (max(0, 100 - (social_data['turnover'] * 2)) + # Lower turnover is better
-               max(0, 100 - (social_data['incidents'] * 10)) + # Lower incidents is better
-               social_data['diversity']) / 3                  # Higher diversity is better
-
-    # Governance Score: Higher is better.
-    g_score = (gov_data['independence'] + gov_data['ethics']) / 2 # Direct percentage values
-    
+    e_score = (max(0, 100 - (env_data['energy'] / 1000)) + max(0, 100 - (env_data['water'] / 500)) + max(0, 100 - (env_data['waste'] / 100)) + env_data['recycling']) / 4
+    s_score = (max(0, 100 - (social_data['turnover'] * 2)) + max(0, 100 - (social_data['incidents'] * 10)) + social_data['diversity']) / 3
+    g_score = (gov_data['independence'] + gov_data['ethics']) / 2
     final_score = (e_score * weights['E']) + (s_score * weights['S']) + (g_score * weights['G'])
     return final_score, e_score, s_score, g_score
 
@@ -78,9 +156,9 @@ def get_financial_opportunities(esg_score):
     return [opp for opp in FINANCE_OPPORTUNITIES if esg_score >= opp['minimum_esg_score']]
 
 def calculate_environmental_impact(env_data):
-    energy_co2 = env_data['energy'] * CO2_EMISSION_FACTORS['energy_kwh_to_co2']
-    water_co2 = env_data['water'] * CO2_EMISSION_FACTORS['water_m3_to_co2']
-    waste_co2 = env_data['waste'] * CO2_EMISSION_FACTORS['waste_kg_to_co2']
+    energy_co2 = env_data.get('energy', 0) * CO2_EMISSION_FACTORS['energy_kwh_to_co2']
+    water_co2 = env_data.get('water', 0) * CO2_EMISSION_FACTORS['water_m3_to_co2']
+    waste_co2 = env_data.get('waste', 0) * CO2_EMISSION_FACTORS['waste_kg_to_co2']
     total_co2 = energy_co2 + water_co2 + waste_co2
     return {
         'total_co2_kg': total_co2,
@@ -89,15 +167,9 @@ def calculate_environmental_impact(env_data):
         'waste_co2_kg': waste_co2
     }
 
-# --- Initialize session state for historical data ---
-if 'history' not in st.session_state:
-    st.session_state.history = []
-if 'current_esg_data' not in st.session_state:
-    st.session_state.current_esg_data = None # Store the most recently calculated data
-
 # --- Function to display the full dashboard ---
-def display_dashboard(final_score, e_score, s_score, g_score, env_data):
-    st.header("Your ESG Performance Dashboard")
+def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, current_user_id):
+    st.header(f"Your ESG Performance Dashboard, {st.session_state.name}!") # Personalized welcome
 
     # Animated Overall Score
     overall_score_placeholder = st.empty()
@@ -188,14 +260,15 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data):
                     st.subheader(f"{opp['icon']} {opp['name']}")
                     st.write(f"**Type:** {opp['type']} | **Minimum ESG Score:** {opp['minimum_esg_score']}")
                     st.write(opp['description'])
-                    st.link_button(f"Apply Now {opp['icon']}", opp['url']) # Modified: Added icon to button
+                    st.link_button(f"Apply Now {opp['icon']}", opp['url'])
 
-    with tab4: # New: Historical Trends Tab
+    with tab4: # Historical Trends Tab
         st.header("🕰️ Your ESG Performance History")
-        if not st.session_state.history:
-            st.info("No historical data available yet. Calculate your score and save it to build a trend.")
+        history = get_esg_history(current_user_id)
+        if not history:
+            st.info("No historical data available yet. Calculate your score and it will be saved automatically to build a trend.")
         else:
-            history_df = pd.DataFrame(st.session_state.history)
+            history_df = pd.DataFrame(history)
             
             # Line chart for Overall ESG Score over time
             fig_history_overall = go.Figure()
@@ -212,271 +285,366 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data):
             st.plotly_chart(fig_history_esg, use_container_width=True)
 
             st.subheader("Raw Historical Data")
-            st.dataframe(history_df.set_index('timestamp').sort_index(ascending=False))
+            st.dataframe(history_df[['timestamp', 'overall_score', 'e_score', 's_score', 'g_score']].set_index('timestamp').sort_index(ascending=False))
 
-    with tab5: # New: Scenario Planner Tab
+    with tab5: # Scenario Planner Tab
         st.header("🧪 Scenario Planner: What If...?")
         st.write("Adjust the metrics below to see how your ESG score and opportunities would change.")
 
-        if st.session_state.current_esg_data is None:
-            st.warning("Please calculate your initial ESG score first to populate the scenario planner.")
-        else:
-            current_data = st.session_state.current_esg_data
-            
-            st.subheader("Adjust Metrics for Scenario")
-            col_s1, col_s2, col_s3 = st.columns(3)
+        current_data = st.session_state.get('current_esg_input_data') # Get current data from session state
+        
+        if current_data is None:
+            st.warning("Please calculate your initial ESG score first to populate the scenario planner. This uses your last entered data.")
+            # Provide default values if no data is available yet
+            default_env = {'energy': 50000, 'water': 2500, 'waste': 1000, 'recycling': 40}
+            default_social = {'turnover': 15, 'incidents': 3, 'diversity': 30}
+            default_gov = {'independence': 50, 'ethics': 85}
+            current_data = {'env': default_env, 'social': default_social, 'gov': default_gov}
 
-            with col_s1:
-                st.markdown("##### 🌳 Environmental")
-                scenario_energy = st.number_input("Energy Consumption (kWh)", min_value=0, value=current_data['env']['energy'], key='scenario_energy')
-                scenario_water = st.number_input("Water Usage (m³)", min_value=0, value=current_data['env']['water'], key='scenario_water')
-                scenario_waste = st.number_input("Waste Generated (kg)", min_value=0, value=current_data['env']['waste'], key='scenario_waste')
-                scenario_recycling = st.slider("Recycling Rate (%)", min_value=0, max_value=100, value=current_data['env']['recycling'], key='scenario_recycling')
-            
-            with col_s2:
-                st.markdown("##### ❤️ Social")
-                scenario_turnover = st.slider("Employee Turnover Rate (%)", min_value=0, max_value=100, value=current_data['social']['turnover'], key='scenario_turnover')
-                scenario_incidents = st.number_input("Safety Incidents", min_value=0, value=current_data['social']['incidents'], key='scenario_incidents')
-                scenario_diversity = st.slider("Management Diversity (%)", min_value=0, max_value=100, value=current_data['social']['diversity'], key='scenario_diversity')
 
-            with col_s3:
-                st.markdown("##### ⚖️ Governance")
-                scenario_independence = st.slider("Board Independence (%)", min_value=0, max_value=100, value=current_data['gov']['independence'], key='scenario_independence')
-                scenario_ethics = st.slider("Ethics Training Completion (%)", min_value=0, max_value=100, value=current_data['gov']['ethics'], key='scenario_ethics')
+        st.subheader("Adjust Metrics for Scenario")
+        col_s1, col_s2, col_s3 = st.columns(3)
 
-            scenario_env_data = {'energy': scenario_energy, 'water': scenario_water, 'waste': scenario_waste, 'recycling': scenario_recycling}
-            scenario_social_data = {'turnover': scenario_turnover, 'incidents': scenario_incidents, 'diversity': scenario_diversity}
-            scenario_gov_data = {'independence': scenario_independence, 'ethics': scenario_ethics}
-            
-            scenario_final_score, scenario_e_score, scenario_s_score, scenario_g_score = calculate_esg_score(scenario_env_data, scenario_social_data, scenario_gov_data)
+        with col_s1:
+            st.markdown("##### 🌳 Environmental")
+            scenario_energy = st.number_input("Energy Consumption (kWh)", min_value=0, value=current_data['env']['energy'], key='scenario_energy')
+            scenario_water = st.number_input("Water Usage (m³)", min_value=0, value=current_data['env']['water'], key='scenario_water')
+            scenario_waste = st.number_input("Waste Generated (kg)", min_value=0, value=current_data['env']['waste'], key='scenario_waste')
+            scenario_recycling = st.slider("Recycling Rate (%)", min_value=0, max_value=100, value=current_data['env']['recycling'], key='scenario_recycling')
+        
+        with col_s2:
+            st.markdown("##### ❤️ Social")
+            scenario_turnover = st.slider("Employee Turnover Rate (%)", min_value=0, max_value=100, value=current_data['social']['turnover'], key='scenario_turnover')
+            scenario_incidents = st.number_input("Safety Incidents", min_value=0, value=current_data['social']['incidents'], key='scenario_incidents')
+            scenario_diversity = st.slider("Management Diversity (%)", min_value=0, max_value=100, value=current_data['social']['diversity'], key='scenario_diversity')
 
-            st.subheader("Projected Scenario Results")
-            col_res1, col_res2 = st.columns(2)
-            with col_res1:
-                st.metric("Projected Overall ESG Score", f"{scenario_final_score:.1f}")
-                st.metric("Projected Environmental Score", f"{scenario_e_score:.1f}")
-                st.metric("Projected Social Score", f"{scenario_s_score:.1f}")
-                st.metric("Projected Governance Score", f"{scenario_g_score:.1f}")
-            with col_res2:
-                st.markdown("##### Projected Unlocked Opportunities")
-                scenario_unlocked_opportunities = get_financial_opportunities(scenario_final_score)
-                if not scenario_unlocked_opportunities:
-                    st.warning("No opportunities unlocked in this scenario. Try improving metrics further!")
-                else:
-                    for opp in scenario_unlocked_opportunities:
-                        st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
+        with col_s3:
+            st.markdown("##### ⚖️ Governance")
+            scenario_independence = st.slider("Board Independence (%)", min_value=0, max_value=100, value=current_data['gov']['independence'], key='scenario_independence')
+            scenario_ethics = st.slider("Ethics Training Completion (%)", min_value=0, max_value=100, value=current_data['gov']['ethics'], key='scenario_ethics')
+
+        scenario_env_data = {'energy': scenario_energy, 'water': scenario_water, 'waste': scenario_waste, 'recycling': scenario_recycling}
+        scenario_social_data = {'turnover': scenario_turnover, 'incidents': scenario_incidents, 'diversity': scenario_diversity}
+        scenario_gov_data = {'independence': scenario_independence, 'ethics': scenario_ethics}
+        
+        scenario_final_score, scenario_e_score, scenario_s_score, scenario_g_score = calculate_esg_score(scenario_env_data, scenario_social_data, scenario_gov_data)
+
+        st.subheader("Projected Scenario Results")
+        col_res1, col_res2 = st.columns(2)
+        with col_res1:
+            st.metric("Projected Overall ESG Score", f"{scenario_final_score:.1f}")
+            st.metric("Projected Environmental Score", f"{scenario_e_score:.1f}")
+            st.metric("Projected Social Score", f"{scenario_s_score:.1f}")
+            st.metric("Projected Governance Score", f"{scenario_g_score:.1f}")
+        with col_res2:
+            st.markdown("##### Projected Unlocked Opportunities")
+            scenario_unlocked_opportunities = get_financial_opportunities(scenario_final_score)
+            if not scenario_unlocked_opportunities:
+                st.warning("No opportunities unlocked in this scenario. Try improving metrics further!")
+            else:
+                for opp in scenario_unlocked_opportunities:
+                    st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
+
 
     st.divider() # Divider before the download button and footer
 
     # Export Report
-    if final_score is not None:
-        report_data = {
-            "Overall_ESG_Score": f"{final_score:.1f}",
-            "Environmental_Score": f"{e_score:.1f}",
-            "Social_Score": f"{s_score:.1f}",
-            "Governance_Score": f"{g_score:.1f}",
-            "Input_Data": {
-                "Environmental": {
-                    "Energy_Consumption_kWh": env_data['energy'],
-                    "Water_Usage_m3": env_data['water'],
-                    "Waste_Generation_kg": env_data['waste'],
-                    "Recycling_Rate_pct": env_data['recycling']
-                },
-                "Social": {
-                    "Employee_Turnover_pct": social_data['turnover'],
-                    "Safety_Incidents_count": social_data['incidents'],
-                    "Management_Diversity_pct": social_data['diversity']
-                },
-                "Governance": {
-                    "Board_Independence_pct": gov_data['independence'],
-                    "Ethics_Training_pct": gov_data['ethics']
-                }
-            },
-            "Environmental_Impact_Estimation": calculate_environmental_impact(env_data),
-            "Recommendations_Environmental": recommendations['E'],
-            "Recommendations_Social": recommendations['S'],
-            "Recommendations_Governance": recommendations['G'],
-            "Unlocked_Financial_Opportunities": [{"name": opp['name'], "type": opp['type'], "min_esg": opp['minimum_esg_score']} for opp in unlocked_opportunities],
-            "Industry_Benchmark_Averages": INDUSTRY_AVERAGES
-        }
-        json_report = json.dumps(report_data, indent=4)
-        st.download_button(
-            label="Download Full ESG Report (JSON) 📥",
-            data=json_report,
-            file_name="greeninvest_esg_report.json",
-            mime="application/json",
-            use_container_width=True
-        )
-
-
-# --- UI ---
-st.title("🌿 GreenInvest Analytics")
-st.markdown("An interactive tool for SMEs to measure, improve, and report on their ESG performance to unlock green finance opportunities.")
-
-# --- Sidebar ---
-st.sidebar.header("Step 1: Choose Input Method")
-st.sidebar.divider()
-input_method = st.sidebar.radio("Select how you want to provide data:", ("Manual Input", "Upload CSV File"))
-
-# --- Create a sample CSV for download ---
-@st.cache_data
-def get_template_csv():
-    template_data = {
-        'metric': [
-            'energy_consumption_kwh', 'water_usage_m3', 'waste_generation_kg', 'recycling_rate_pct',
-            'employee_turnover_pct', 'safety_incidents_count', 'management_diversity_pct',
-            'board_independence_pct', 'ethics_training_pct'
-        ],
-        'value': [50000, 2500, 1000, 40, 15, 3, 30, 50, 85]
+    # Pass all relevant data to display_dashboard to ensure it's available for report generation
+    # if st.session_state.current_esg_input_data is not None: # Ensure data exists to generate report
+    report_data = {
+        "User": st.session_state.username,
+        "Report_Date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "Overall_ESG_Score": f"{final_score:.1f}",
+        "Environmental_Score": f"{e_score:.1f}",
+        "Social_Score": f"{s_score:.1f}",
+        "Governance_Score": f"{g_score:.1f}",
+        "Input_Data": {
+            "Environmental": env_data,
+            "Social": social_data,
+            "Governance": gov_data
+        },
+        "Environmental_Impact_Estimation": calculate_environmental_impact(env_data),
+        "Recommendations_Environmental": get_recommendations(e_score, s_score, g_score)['E'],
+        "Recommendations_Social": get_recommendations(e_score, s_score, g_score)['S'],
+        "Recommendations_Governance": get_recommendations(e_score, s_score, g_score)['G'],
+        "Unlocked_Financial_Opportunities": [{"name": opp['name'], "type": opp['type'], "min_esg": opp['minimum_esg_score']} for opp in unlocked_opportunities],
+        "Industry_Benchmark_Averages": INDUSTRY_AVERAGES
     }
-    df = pd.DataFrame(template_data)
-    return df.to_csv(index=False).encode('utf-8')
-
-# --- Display input fields based on user's choice ---
-if input_method == "Manual Input":
-    st.sidebar.header("Step 2: Input Your Data")
-    with st.sidebar.expander("🌳 Environmental", expanded=True):
-        energy_consumption = st.number_input(
-            "Annual Energy Consumption (kWh)",
-            min_value=0,
-            value=50000,
-            help="Total electricity, natural gas, and other fuel consumption in kilowatt-hours (kWh) over the past year."
-        )
-        water_usage = st.number_input(
-            "Annual Water Usage (cubic meters)",
-            min_value=0,
-            value=2500,
-            help="Total water consumed in cubic meters (m³) over the past year."
-        )
-        waste_generation = st.number_input(
-            "Annual Waste Generated (kg)",
-            min_value=0,
-            value=1000,
-            help="Total solid waste generated in kilograms (kg) annually."
-        )
-        recycling_rate = st.slider(
-            "Recycling Rate (%)",
-            min_value=0, max_value=100, value=40,
-            help="Percentage of total waste that is recycled."
-        )
-    with st.sidebar.expander("❤️ Social", expanded=True):
-        employee_turnover = st.slider(
-            "Employee Turnover Rate (%)",
-            min_value=0, max_value=100, value=15,
-            help="Percentage of employees leaving the company annually."
-        )
-        safety_incidents = st.number_input(
-            "Number of Safety Incidents",
-            min_value=0, value=3,
-            help="Total number of reported workplace safety incidents annually."
-        )
-        diversity_ratio = st.slider(
-            "Management Diversity (%)",
-            min_value=0, max_value=100, value=30,
-            help="Percentage of management positions held by individuals from diverse backgrounds."
-        )
-    with st.sidebar.expander("⚖️ Governance", expanded=True):
-        board_independence = st.slider(
-            "Board Independence (%)",
-            min_value=0, max_value=100, value=50,
-            help="Percentage of independent directors on your company's board."
-        )
-        ethics_training = st.slider(
-            "Ethics Training Completion (%)",
-            min_value=0, max_value=100, value=85,
-            help="Percentage of employees who have completed ethics training annually."
-        )
-    
-    if st.sidebar.button("Calculate ESG Score", type="primary", use_container_width=True):
-        env_data = {'energy': energy_consumption, 'water': water_usage, 'waste': waste_generation, 'recycling': recycling_rate}
-        social_data = {'turnover': employee_turnover, 'incidents': safety_incidents, 'diversity': diversity_ratio}
-        gov_data = {'independence': board_independence, 'ethics': ethics_training}
-        
-        final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
-        
-        # Store current data in session state for scenario and history
-        st.session_state.current_esg_data = {
-            'env': env_data,
-            'social': social_data,
-            'gov': gov_data
-        }
-        st.session_state.history.append({
-            'timestamp': pd.to_datetime('today'), # Use actual timestamp for history
-            'overall_score': final_score,
-            'e_score': e_score,
-            's_score': s_score,
-            'g_score': g_score
-        })
-        
-        display_dashboard(final_score, e_score, s_score, g_score, env_data)
-    else:
-        st.info("Enter your data manually in the sidebar and click 'Calculate ESG Score'.")
-
-else: # CSV Upload
-    st.sidebar.header("Step 2: Upload Your Data")
-    uploaded_file = st.sidebar.file_uploader("Upload your ESG data file (.csv)", type=["csv"])
-    
-    st.sidebar.download_button(
-        label="Download Template CSV",
-        data=get_template_csv(),
-        file_name="esg_data_template.csv",
-        mime="text/csv",
+    json_report = json.dumps(report_data, indent=4)
+    st.download_button(
+        label="Download Full ESG Report (JSON) 📥",
+        data=json_report,
+        file_name=f"{st.session_state.username}_esg_report.json",
+        mime="application/json",
         use_container_width=True
     )
 
-    if uploaded_file is not None:
-        with st.spinner('Processing your data...'): # Loading spinner
-            try:
-                data_df = pd.read_csv(uploaded_file)
-                # Convert the two-column format to a dictionary
-                data_dict = pd.Series(data_df.value.values, index=data_df.metric).to_dict()
 
-                # Extract data
-                env_data = {
-                    'energy': data_dict.get('energy_consumption_kwh', 0),
-                    'water': data_dict.get('water_usage_m3', 0),
-                    'waste': data_dict.get('waste_generation_kg', 0),
-                    'recycling': data_dict.get('recycling_rate_pct', 0)
-                }
-                social_data = {
-                    'turnover': data_dict.get('employee_turnover_pct', 0),
-                    'incidents': data_dict.get('safety_incidents_count', 0),
-                    'diversity': data_dict.get('management_diversity_pct', 0)
-                }
-                gov_data = {
-                    'independence': data_dict.get('board_independence_pct', 0),
-                    'ethics': data_dict.get('ethics_training_pct', 0)
-                }
-                
-                st.sidebar.success("File uploaded and processed successfully!")
-                
-                # Calculate and display
-                final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
+# --- AUTHENTICATION ---
+import streamlit_authenticator as st_auth
 
-                # Store current data in session state for scenario and history
-                st.session_state.current_esg_data = {
-                    'env': env_data,
-                    'social': social_data,
-                    'gov': gov_data
-                }
-                st.session_state.history.append({
-                    'timestamp': pd.to_datetime('today'), # Use actual timestamp for history
-                    'overall_score': final_score,
-                    'e_score': e_score,
-                    's_score': s_score,
-                    'g_score': g_score
-                })
-                
-                display_dashboard(final_score, e_score, s_score, g_score, env_data)
+# Retrieve existing users from DB for authenticator
+def get_all_users_for_authenticator():
+    conn = sqlite3.connect(DATABASE_NAME)
+    c = conn.cursor()
+    c.execute("SELECT name, username, password_hash FROM users")
+    users_data = c.fetchall()
+    conn.close()
+    
+    names = [row[0] for row in users_data]
+    usernames = [row[1] for row in users_data]
+    hashed_passwords = [row[2] for row in users_data]
+    
+    return names, usernames, hashed_passwords
 
-            except KeyError as ke:
-                st.error(f"Missing expected metric in CSV: {ke}. Please check the template file.")
-                st.warning("Ensure your CSV file contains all the required 'metric' names as in the template.")
-            except Exception as e:
-                st.error(f"An error occurred processing the file: {e}")
-                st.warning("Please make sure your CSV file follows the format of the template.")
-    else:
-        st.info("Upload a CSV file using the sidebar to see your ESG analysis.")
+names, usernames, hashed_passwords = get_all_users_for_authenticator()
 
-st.divider()
-st.write("Made with ❤️ for a greener future. – Friday")
+# Initialize authenticator
+authenticator = st_auth.Authenticate(
+    names,
+    usernames,
+    hashed_passwords,
+    'greeninvest_cookie', # cookie name
+    'abcdef', # cookie key (should be complex and secret!)
+    cookie_expiry_days=30
+)
+
+# --- Main App Logic (Conditional based on authentication) ---
+name, authentication_status, username = authenticator.login('Login', 'main')
+
+if st.session_state["authentication_status"]:
+    st.session_state.username = username # Store username in session state
+    user_data = get_user(username)
+    st.session_state.user_id = user_data[0] # Store user_id
+    st.session_state.name = user_data[3] # Store user's given name
+
+    authenticator.logout('Logout', 'sidebar')
+    
+    st.title("🌿 GreenInvest Analytics")
+    st.markdown(f"Welcome back, **{st.session_state.name}**! Analyze and improve your ESG performance to unlock green finance opportunities.")
+    
+    st.sidebar.header("Step 1: Choose Input Method")
+    st.sidebar.divider()
+    input_method = st.sidebar.radio("Select how you want to provide data:", ("Manual Input", "Upload CSV File"))
+
+    # --- Create a sample CSV for download ---
+    @st.cache_data
+    def get_template_csv():
+        template_data = {
+            'metric': [
+                'energy_consumption_kwh', 'water_usage_m3', 'waste_generation_kg', 'recycling_rate_pct',
+                'employee_turnover_pct', 'safety_incidents_count', 'management_diversity_pct',
+                'board_independence_pct', 'ethics_training_pct'
+            ],
+            'value': [50000, 2500, 1000, 40, 15, 3, 30, 50, 85]
+        }
+        df = pd.DataFrame(template_data)
+        return df.to_csv(index=False).encode('utf-8')
+
+    # --- Display input fields based on user's choice ---
+    if input_method == "Manual Input":
+        st.sidebar.header("Step 2: Input Your Data")
+        with st.sidebar.expander("🌳 Environmental", expanded=True):
+            energy_consumption = st.number_input(
+                "Annual Energy Consumption (kWh)",
+                min_value=0,
+                value=st.session_state.get('last_env_input', {}).get('energy', 50000), # Populate from last input if available
+                help="Total electricity, natural gas, and other fuel consumption in kilowatt-hours (kWh) over the past year."
+            )
+            water_usage = st.number_input(
+                "Annual Water Usage (cubic meters)",
+                min_value=0,
+                value=st.session_state.get('last_env_input', {}).get('water', 2500),
+                help="Total water consumed in cubic meters (m³) over the past year."
+            )
+            waste_generation = st.number_input(
+                "Annual Waste Generated (kg)",
+                min_value=0,
+                value=st.session_state.get('last_env_input', {}).get('waste', 1000),
+                help="Total solid waste generated in kilograms (kg) annually."
+            )
+            recycling_rate = st.slider(
+                "Recycling Rate (%)",
+                min_value=0, max_value=100, value=st.session_state.get('last_env_input', {}).get('recycling', 40),
+                help="Percentage of total waste that is recycled."
+            )
+        with st.sidebar.expander("❤️ Social", expanded=True):
+            employee_turnover = st.slider(
+                "Employee Turnover Rate (%)",
+                min_value=0, max_value=100, value=st.session_state.get('last_social_input', {}).get('turnover', 15),
+                help="Percentage of employees leaving the company annually."
+            )
+            safety_incidents = st.number_input(
+                "Number of Safety Incidents",
+                min_value=0, value=st.session_state.get('last_social_input', {}).get('incidents', 3),
+                help="Total number of reported workplace safety incidents annually."
+            )
+            diversity_ratio = st.slider(
+                "Management Diversity (%)",
+                min_value=0, max_value=100, value=st.session_state.get('last_social_input', {}).get('diversity', 30),
+                help="Percentage of management positions held by individuals from diverse backgrounds."
+            )
+        with st.sidebar.expander("⚖️ Governance", expanded=True):
+            board_independence = st.slider(
+                "Board Independence (%)",
+                min_value=0, max_value=100, value=st.session_state.get('last_gov_input', {}).get('independence', 50),
+                help="Percentage of independent directors on your company's board."
+            )
+            ethics_training = st.slider(
+                "Ethics Training Completion (%)",
+                min_value=0, max_value=100, value=st.session_state.get('last_gov_input', {}).get('ethics', 85),
+                help="Percentage of employees who have completed ethics training annually."
+            )
+        
+        if st.sidebar.button("Calculate ESG Score", type="primary", use_container_width=True):
+            env_data = {'energy': energy_consumption, 'water': water_usage, 'waste': waste_generation, 'recycling': recycling_rate}
+            social_data = {'turnover': employee_turnover, 'incidents': safety_incidents, 'diversity': diversity_ratio}
+            gov_data = {'independence': board_independence, 'ethics': ethics_training}
+            
+            final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
+            
+            # Save current input data to session state for scenario planner
+            st.session_state.current_esg_input_data = {
+                'env': env_data, 'social': social_data, 'gov': gov_data
+            }
+            # Save inputs to session state for pre-filling manual fields next time
+            st.session_state.last_env_input = env_data
+            st.session_state.last_social_input = social_data
+            st.session_state.last_gov_input = gov_data
+
+
+            # Save to database
+            save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
+                             final_score, e_score, s_score, g_score,
+                             env_data, social_data, gov_data)
+            
+            display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
+        else:
+            st.info("Enter your data manually in the sidebar and click 'Calculate ESG Score'.")
+
+    else: # CSV Upload
+        st.sidebar.header("Step 2: Upload Your Data")
+        uploaded_file = st.sidebar.file_uploader("Upload your ESG data file (.csv)", type=["csv"])
+        
+        st.sidebar.download_button(
+            label="Download Template CSV",
+            data=get_template_csv(),
+            file_name="esg_data_template.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+
+        if uploaded_file is not None:
+            with st.spinner('Processing your data...'): # Loading spinner
+                try:
+                    data_df = pd.read_csv(uploaded_file)
+                    # Convert the two-column format to a dictionary
+                    # Use .get with default 0 to handle potential missing keys gracefully
+                    data_dict = pd.Series(data_df.value.values, index=data_df.metric).to_dict()
+
+                    # Extract data
+                    env_data = {
+                        'energy': data_dict.get('energy_consumption_kwh', 0),
+                        'water': data_dict.get('water_usage_m3', 0),
+                        'waste': data_dict.get('waste_generation_kg', 0),
+                        'recycling': data_dict.get('recycling_rate_pct', 0)
+                    }
+                    social_data = {
+                        'turnover': data_dict.get('employee_turnover_pct', 0),
+                        'incidents': data_dict.get('safety_incidents_count', 0),
+                        'diversity': data_dict.get('management_diversity_pct', 0)
+                    }
+                    gov_data = {
+                        'independence': data_dict.get('board_independence_pct', 0),
+                        'ethics': data_dict.get('ethics_training_pct', 0)
+                    }
+                    
+                    st.sidebar.success("File uploaded and processed successfully!")
+                    
+                    # Calculate and display
+                    final_score, e_score, s_score, g_score = calculate_esg_score(env_data, social_data, gov_data)
+
+                    # Store current input data to session state for scenario planner
+                    st.session_state.current_esg_input_data = {
+                        'env': env_data, 'social': social_data, 'gov': gov_data
+                    }
+                    # Save inputs to session state for pre-filling manual fields next time
+                    st.session_state.last_env_input = env_data
+                    st.session_state.last_social_input = social_data
+                    st.session_state.last_gov_input = gov_data
+
+                    # Save to database
+                    save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
+                                     final_score, e_score, s_score, g_score,
+                                     env_data, social_data, gov_data)
+                    
+                    display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
+
+                except KeyError as ke:
+                    st.error(f"Missing expected metric in CSV: {ke}. Please check the template file.")
+                    st.warning("Ensure your CSV file contains all the required 'metric' names as in the template.")
+                except Exception as e:
+                    st.error(f"An error occurred processing the file: {e}")
+                    st.warning("Please make sure your CSV file follows the format of the template.")
+        else:
+            st.info("Upload a CSV file using the sidebar to see your ESG analysis.")
+
+    st.divider()
+    st.write("Made with ❤️ for a greener future. – Friday")
+
+elif st.session_state["authentication_status"] is False:
+    st.error('Username/password is incorrect. Please try again or register.')
+    st.divider()
+    
+    # Registration form
+    with st.expander("New User? Register Here", expanded=True):
+        st.subheader("Register for GreenInvest Analytics")
+        with st.form("register_form"):
+            new_name = st.text_input("Your Name", key="reg_name")
+            new_username = st.text_input("New Username", key="reg_username")
+            new_password = st.text_input("New Password", type="password", key="reg_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm_password")
+            
+            register_button = st.form_submit_button("Register")
+
+            if register_button:
+                if new_password != confirm_password:
+                    st.error("Passwords do not match.")
+                elif len(new_username) < 3 or len(new_password) < 6:
+                    st.error("Username must be at least 3 characters and password at least 6 characters.")
+                else:
+                    # Hash password before storing
+                    hashed_new_password = hashlib.sha256(new_password.encode()).hexdigest()
+                    if add_user(new_username, hashed_new_password, new_name):
+                        st.success("You have successfully registered! Please log in above.")
+                    else:
+                        st.error("Username already exists. Please choose a different one.")
+    st.write("Made with ❤️ for a greener future. – Friday")
+
+elif st.session_state["authentication_status"] is None:
+    st.info('Please log in or register to access the GreenInvest Analytics platform.')
+    st.divider()
+    
+    # Registration form
+    with st.expander("New User? Register Here", expanded=True):
+        st.subheader("Register for GreenInvest Analytics")
+        with st.form("register_form_initial"): # Unique key for this form
+            new_name = st.text_input("Your Name", key="reg_name_initial")
+            new_username = st.text_input("New Username", key="reg_username_initial")
+            new_password = st.text_input("New Password", type="password", key="reg_password_initial")
+            confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm_password_initial")
+            
+            register_button = st.form_submit_button("Register")
+
+            if register_button:
+                if new_password != confirm_password:
+                    st.error("Passwords do not match.")
+                elif len(new_username) < 3 or len(new_password) < 6:
+                    st.error("Username must be at least 3 characters and password at least 6 characters.")
+                else:
+                    hashed_new_password = hashlib.sha256(new_password.encode()).hexdigest()
+                    if add_user(new_username, hashed_new_password, new_name):
+                        st.success("You have successfully registered! Please log in above.")
+                    else:
+                        st.error("Username already exists. Please choose a different one.")
+    st.write("Made with ❤️ for a greener future. – Friday")
