@@ -2,87 +2,85 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 import time
-import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-import time
 import sqlite3
 import hashlib
 from sqlalchemy import create_engine, text
 
-# --- Setup SQLite DB for users ---
-user_engine = create_engine('sqlite:///users.db')
-with user_engine.connect() as conn:
+# --- Set up SQLite connection ---
+engine = create_engine("sqlite:///users.db", echo=False)
+
+# --- Create table if not exists ---
+with engine.connect() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
         )
     """))
 
-# --- Password Hashing ---
+# --- Helper functions for password hashing ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
-def verify_password(password, hashed):
-    return hash_password(password) == hashed
-
-# --- Register New User ---
 def register_user(username, password):
     hashed = hash_password(password)
     try:
-        with user_engine.connect() as conn:
+        with engine.connect() as conn:
             conn.execute(text("INSERT INTO users (username, password) VALUES (:u, :p)"),
                          {"u": username, "p": hashed})
         return True
-    except Exception:
+    except Exception as e:
         return False
 
-# --- Validate Login ---
 def login_user(username, password):
-    with user_engine.connect() as conn:
-        result = conn.execute(text("SELECT password FROM users WHERE username = :u"),
-                              {"u": username}).fetchone()
-    return result and verify_password(password, result[0])
+    hashed = hash_password(password)
+    with engine.connect() as conn:
+        result = conn.execute(text("SELECT * FROM users WHERE username = :u AND password = :p"),
+                              {"u": username, "p": hashed}).fetchone()
+        return result is not None
 
-# --- Login/Register Interface ---
-def login_page():
-    st.title("🔐 Welcome to GreenInvest Analytics")
+# --- Streamlit Login/Registration UI ---
+def login_screen():
+    st.title("🌱 GreenInvest ESG Analytics - Login")
 
-    menu = st.sidebar.radio("Login / Register", ["Login", "Register"])
+    menu = st.sidebar.radio("Navigation", ["Login", "Register"])
 
     if menu == "Login":
+        st.subheader("Login")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
+
         if st.button("Login"):
             if login_user(username, password):
-                st.session_state['logged_in'] = True
-                st.session_state['username'] = username
-                st.success(f"Welcome back, {username}!")
-                time.sleep(1)
+                st.session_state.logged_in = True
+                st.session_state.username = username
+                st.success(f"Welcome, {username}!")
                 st.rerun()
             else:
                 st.error("Invalid username or password.")
 
     elif menu == "Register":
-        new_user = st.text_input("Choose a Username")
-        new_pass = st.text_input("Choose a Password", type="password")
+        st.subheader("Register")
+        new_user = st.text_input("New Username")
+        new_pass = st.text_input("New Password", type="password")
         if st.button("Register"):
             if register_user(new_user, new_pass):
-                st.success("Registration successful! Please log in.")
+                st.success("Registration successful. You can now log in.")
             else:
-                st.error("Username already exists. Try another.")
+                st.error("Username already taken. Try another.")
 
-# --- ESG logic continues only if user is logged in ---
-if 'logged_in' not in st.session_state or not st.session_state['logged_in']:
-    login_page()
+# --- App starts here ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    login_screen()
     st.stop()
 
-# At this point, user is logged in. Now load your existing ESG app below this line.
-# ↓↓↓ Paste your full existing ESG app here ↓↓↓
-# For brevity, refer to your long code block and paste after this comment.
-
+# --- Main ESG App (only visible after login) ---
+st.title("🌍 Welcome to GreenInvest ESG Analytics Dashboard")
+st.write(f"Logged in as: {st.session_state.username}")
 
 # --- Page Configuration ---
 st.set_page_config(
