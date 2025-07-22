@@ -1,16 +1,16 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
-import time
-import sqlite3
 import hashlib
 from sqlalchemy import create_engine, text
 
-# --- Set up SQLite connection ---
+# --- Setup ---
+st.set_page_config(page_title="GreenInvest ESG Analytics", layout="centered")
+
+# --- Database setup ---
 engine = create_engine("sqlite:///users.db", echo=False)
 
-# --- Create table if not exists ---
-with engine.connect() as conn:
+# Create users table if not exists
+with engine.begin() as conn:
     conn.execute(text("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,18 +19,20 @@ with engine.connect() as conn:
         )
     """))
 
-# --- Helper functions for password hashing ---
+# --- Password utility functions ---
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 def register_user(username, password):
     hashed = hash_password(password)
     try:
-        with engine.connect() as conn:
+        with engine.begin() as conn:
             conn.execute(text("INSERT INTO users (username, password) VALUES (:u, :p)"),
                          {"u": username, "p": hashed})
         return True
     except Exception as e:
+        st.error("User registration failed. Username may already exist.")
+        print(f"[Register Error] {e}")
         return False
 
 def login_user(username, password):
@@ -40,55 +42,59 @@ def login_user(username, password):
                               {"u": username, "p": hashed}).fetchone()
         return result is not None
 
-# --- Streamlit Login/Registration UI ---
-def login_screen():
-    st.title("🌱 GreenInvest ESG Analytics - Login")
+# --- Main app logic ---
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
 
-    menu = st.sidebar.radio("Navigation", ["Login", "Register"])
+if not st.session_state.logged_in:
+    st.title("🔐 GreenInvest ESG Analytics")
+
+    menu = st.selectbox("Login / Signup", ["Login", "Signup"])
 
     if menu == "Login":
         st.subheader("Login")
         username = st.text_input("Username")
         password = st.text_input("Password", type="password")
-
         if st.button("Login"):
             if login_user(username, password):
                 st.session_state.logged_in = True
                 st.session_state.username = username
                 st.success(f"Welcome, {username}!")
-                st.rerun()
+                st.experimental_rerun()
             else:
-                st.error("Invalid username or password.")
+                st.error("Invalid username or password")
 
-    elif menu == "Register":
-        st.subheader("Register")
-        new_user = st.text_input("New Username")
-        new_pass = st.text_input("New Password", type="password")
+    elif menu == "Signup":
+        st.subheader("Create New Account")
+        new_user = st.text_input("Username")
+        new_pass = st.text_input("Password", type="password")
         if st.button("Register"):
             if register_user(new_user, new_pass):
-                st.success("Registration successful. You can now log in.")
-            else:
-                st.error("Username already taken. Try another.")
+                st.success("Account created successfully. Please log in.")
+                st.experimental_rerun()
+else:
+    st.sidebar.success(f"Logged in as: {st.session_state.username}")
+    if st.sidebar.button("Logout"):
+        st.session_state.logged_in = False
+        st.session_state.username = ""
+        st.experimental_rerun()
 
-# --- App starts here ---
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
+    # --- ESG Dashboard Placeholder ---
+    st.title("🌱 GreenInvest ESG Analytics Dashboard")
+    st.write("Welcome to your personalized ESG dashboard!")
 
-if not st.session_state.logged_in:
-    login_screen()
-    st.stop()
+    uploaded_file = st.file_uploader("Upload ESG Data CSV", type="csv")
+    if uploaded_file:
+        df = pd.read_csv(uploaded_file)
+        st.write("Uploaded Data Preview:")
+        st.dataframe(df)
 
-# --- Main ESG App (only visible after login) ---
-st.title("🌍 Welcome to GreenInvest ESG Analytics Dashboard")
-st.write(f"Logged in as: {st.session_state.username}")
+        # Example ESG Analysis
+        if "ESG Score" in df.columns:
+            st.subheader("Average ESG Score by Sector")
+            avg_scores = df.groupby("Sector")["ESG Score"].mean().reset_index()
+            st.bar_chart(avg_scores.set_index("Sector"))
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="GreenInvest Analytics",
-    page_icon="🌿",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # --- MOCK DATABASE & HELPER FUNCTIONS (No changes here) ---
 FINANCE_OPPORTUNITIES = [
