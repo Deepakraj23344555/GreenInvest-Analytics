@@ -17,6 +17,42 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- Custom CSS for Star Buttons ---
+# This CSS makes the star buttons look like clickable icons instead of standard buttons.
+st.markdown("""
+<style>
+/* Target the buttons used for the star rating specifically by looking for their parent container */
+/* This specific selector targets buttons within a horizontally laid out block (like st.columns)
+   that are likely part of the star rating. Adjust if it affects other buttons unexpectedly. */
+div[data-testid="stHorizontalBlock"] .stButton > button {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0px 5px !important; /* Adjust spacing between stars */
+    margin: 0px !important;
+    cursor: pointer; /* Ensure it looks clickable */
+    transition: transform 0.1s ease-in-out; /* Smooth hover effect */
+}
+
+div[data-testid="stHorizontalBlock"] .stButton > button:hover {
+    transform: scale(1.1); /* Slightly enlarge on hover */
+    background-color: transparent !important;
+}
+div[data-testid="stHorizontalBlock"] .stButton > button:active {
+    transform: scale(0.95); /* Slight shrink on click */
+}
+
+/* Style the star characters themselves inside these specific buttons */
+div[data-testid="stHorizontalBlock"] .stButton > button > div > p {
+    font-size: 2.5em; /* Make stars larger */
+    line-height: 1; /* Align star vertically */
+    margin: 0; /* Remove default margin */
+    padding: 0; /* Remove default padding */
+}
+</style>
+""", unsafe_allow_html=True)
+
+
 # --- DATABASE FUNCTIONS ---
 DATABASE_NAME = 'esg_data.db'
 
@@ -367,7 +403,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                 for opp in scenario_unlocked_opportunities:
                     st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
 
-    with tab6: # New: Feedback Tab
+    with tab6: # Feedback Tab
         st.header("💬 Give Us Your Feedback!")
         st.write("Your feedback helps us improve GreenInvest Analytics.")
 
@@ -382,13 +418,16 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         cols = st.columns(5)
         selected_rating = st.session_state.get('feedback_rating', 0)
 
+        # Star buttons outside of any form to allow immediate visual update on click
         for i in range(1, 6): # Stars from 1 to 5
             with cols[i-1]:
-                # Conditionally render filled or outlined star emoji
-                star_display = "⭐" if i <= selected_rating else "☆"
-
-                # Use a button for each star. Clicking updates the session state and causes a rerun.
-                if st.button(star_display, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", use_container_width=True):
+                # Determine the color of the star character
+                star_color = "gold" if i <= selected_rating else "lightgrey"
+                # Create the HTML for the solid star character with inline styling
+                star_label_html = f"<span style='color:{star_color};'>★</span>"
+                
+                # Use st.button and pass the styled HTML. This will trigger a rerun.
+                if st.button(star_label_html, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", unsafe_allow_html=True):
                     st.session_state.feedback_rating = i
                     # st.experimental_rerun() is implicitly called by st.button being clicked.
 
@@ -401,7 +440,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
 
         # Form for optional comments and final submission
-        with st.form("feedback_comment_form"):
+        with st.form("feedback_comment_form", clear_on_submit=True): # clear_on_submit=True to clear textarea
             st.subheader("Optional Comments")
             comment_input = st.text_area(
                 "What did you like or what could be improved?",
@@ -416,10 +455,11 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                 if st.session_state.feedback_rating > 0: # Ensure a rating is given
                     save_user_feedback(st.session_state.user_id, st.session_state.feedback_rating, comment_input)
                     st.success("Thank you for your valuable feedback!")
-                    # Clear the form fields after submission by resetting session state and rerunning
+                    # Clear the form fields after submission by resetting session state
                     st.session_state.feedback_rating = 0 # Reset to no selection
                     st.session_state.feedback_comment = "" # Clear comment
-                    # This reruns the app to visually clear the form inputs
+
+                    # Trigger a rerun to visually clear star selection and text area
                     st.experimental_rerun() 
                 else:
                     st.error("Please provide a rating (click on a star) before submitting your comments.")
@@ -498,7 +538,7 @@ if st.session_state["authentication_status"]:
     st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
     
     # Sidebar logout button with explicit keyword arguments
-    authenticator.logout('Logout', location='sidebar') # FIX APPLIED HERE: Removed 'form_name='
+    authenticator.logout('Logout', location='sidebar') 
     
     # Welcome message and main app content
     st.title("🌿 GreenInvest Analytics")
