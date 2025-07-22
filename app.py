@@ -5,7 +5,7 @@ import time
 
 # -------------------- PAGE CONFIG --------------------
 # Set the page configuration for the Streamlit app
-st.set_page_config(page_title="Retail Sales Dashboard", layout="wide")
+st.set_page_config(page_title="GreenInvest Analytics Dashboard", layout="wide")
 
 # Custom CSS for animations and styling
 st.markdown("""
@@ -52,7 +52,7 @@ st.markdown("""
             color: #ffffff; font-size: 2.5rem; font-weight: bold;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             box-shadow: 0 0 20px rgba(0,0,0,0.3);">
-        🚀 Welcome to the <span style="color: #ffdf00;">✨ SalesPulse</span>!
+        🚀 Welcome to the <span style="color: #ffdf00;">✨ GreenInvest Analytics</span>!
     </div>
 """, unsafe_allow_html=True)
 
