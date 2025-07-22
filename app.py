@@ -258,16 +258,20 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             # Optionally, log a warning here if you had a logging setup
             # st.warning("Session state tab index corrupted; resetting to default tab.")
 
+    tabs = st.tabs(["Environment", "Social", "Governance"])
 
-    # Create the tabs. Store the selected label and its index.
-    tabs = st.tabs(tab_labels)
-     # Optionally store the current tab manually if needed
-    with tabs[0]:
-    # Environment tab content
-    with tabs[1]:
-    # Social tab content
-    with tabs[2]:
-    # Governance tab content
+with tabs[0]:
+    st.subheader("Environmental Metrics")
+    st.write(env_data)  # some DataFrame or metrics
+
+with tabs[1]:
+    st.subheader("Social Metrics")
+    st.write(social_data)
+
+with tabs[2]:
+    st.subheader("Governance Metrics")
+    st.write(gov_data)
+
 
     
     # Persist the index of the currently selected tab for next run
