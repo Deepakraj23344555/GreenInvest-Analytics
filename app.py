@@ -194,3 +194,16 @@ else: # CSV Upload
 
 st.markdown("---")
 st.write("Made with ❤️ for a greener future.")
+# In app.py
+st.sidebar.title("Navigation")
+section = st.sidebar.radio("Go to", ["Home", "Portfolio Optimization", "ESG Trends", "Reports"])
+
+if section == "Home":
+    show_home()
+elif section == "Portfolio Optimization":
+    show_optimizer()
+elif section == "ESG Trends":
+    show_trends()
+elif section == "Reports":
+    show_reports()
+
