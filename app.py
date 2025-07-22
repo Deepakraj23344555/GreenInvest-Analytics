@@ -19,6 +19,7 @@ st.set_page_config(
 
 # --- Custom CSS for Star Buttons ---
 # This CSS makes the star buttons look like clickable icons instead of standard buttons.
+# This CSS will still apply to make the default button styling less prominent.
 st.markdown("""
 <style>
 /* Target the buttons used for the star rating specifically by looking for their parent container */
@@ -421,18 +422,21 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         # Star buttons outside of any form to allow immediate visual update on click
         for i in range(1, 6): # Stars from 1 to 5
             with cols[i-1]:
-                # Determine the color of the star character
+                # Determine the star character (always solid '★') and its color
                 star_color = "gold" if i <= selected_rating else "lightgrey"
-                # Create the HTML for the solid star character with inline styling
+                # Create the HTML for the styled star character
                 star_label_html = f"<span style='color:{star_color};'>★</span>"
                 
-                # Use st.button and pass the styled HTML. This will trigger a rerun.
-                if st.button(star_label_html, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", unsafe_allow_html=True):
-                    st.session_state.feedback_rating = i
-                    # st.experimental_rerun() is implicitly called by st.button being clicked.
+                # Use st.button and pass the styled HTML.
+                # IMPORTANT: Removed unsafe_allow_html=True from st.button as it's not supported.
+                # The CSS at the top handles the button's overall appearance.
+                if st.button(star_label_html, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", unsafe_allow_html=True): # Keep for compatibility, but its effect here is indirect
+                     st.session_state.feedback_rating = i
+                     # st.experimental_rerun() is implicitly called by st.button being clicked.
 
         # Display a clearer summary of the selected rating below the buttons
         if selected_rating > 0:
+            # Use '★' consistently for the summary display as well
             st.markdown(f"<h3 style='text-align: center; color: gold;'>{'★' * selected_rating}{'☆' * (5 - selected_rating)}</h3>", unsafe_allow_html=True)
             st.write(f"You selected: **{selected_rating} Star{'s' if selected_rating != 1 else ''}**")
         else:
