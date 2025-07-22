@@ -5,21 +5,6 @@ import time
 import json
 import sqlite3
 import datetime
-import sqlalchemy
-from sqlalchemy import text
-
-# Set up DB engine
-feedback_engine = sqlalchemy.create_engine("sqlite:///feedback.db")
-
-# Create feedback table if it doesn’t exist
-with feedback_engine.connect() as conn:
-    conn.execute(sqlalchemy.text("""
-        CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT
-        )
-    """))
-
 
 # Import Authenticate and Hasher from streamlit_authenticator
 from streamlit_authenticator import Authenticate, Hasher 
@@ -122,17 +107,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Create 'feedback' table if it doesn't exist
-with feedback_engine.connect() as conn:
-    conn.execute(text("""
-        CREATE TABLE IF NOT EXISTS feedback (
-            username TEXT,
-            message TEXT,
-            submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """))
-    conn.commit()
-
 # Modified to accept bcrypt hashed password
 def add_user(username, password_hash, name):
     conn = sqlite3.connect(DATABASE_NAME)
@@ -183,15 +157,6 @@ def get_esg_history(user_id):
             'gov_data': json.loads(row[7]) if row[7] else None,
         })
     return parsed_history
-
-def save_feedback(username, message):
-    """Saves user feedback to the database."""
-    with feedback_engine.connect() as conn:
-        conn.execute(
-            text("INSERT INTO feedback (username, message) VALUES (:u, :m)"),
-            {"u": username, "m": message}
-        )
-        conn.commit()
 
 # Initialize the database when the app starts
 init_db()
@@ -751,40 +716,3 @@ elif st.session_state["authentication_status"] is None:
                     else:
                         st.error("Username already exists. Please choose a different one.")
     st.write("Made with ❤️ for a greener future. – GreenInvest Analytics")
-
-# -------------------- ADMIN PANEL PAGE --------------------
-elif choice == "Admin Panel":
-    st.subheader("Admin Panel")
-    if st.session_state.user != "admin":
-        st.warning("⛔ You are not authorized to view this page.")
-    else:
-        admin_tab1, admin_tab2 = st.tabs(["Feedback", "Users"])
-        
-        with admin_tab1:
-            st.markdown("### All Feedback")
-            try:
-                feedback_df = pd.read_sql("SELECT * FROM feedback ORDER BY submitted_at DESC", feedback_engine)
-                if feedback_df.empty:
-                    st.info("No feedback submitted yet.")
-                else:
-                    feedback_df['rating'] = feedback_df['message'].str.extract(r'Rating:\s*(\d+)').astype(float)
-                    avg_rating = feedback_df['rating'].mean()
-                    
-                    st.metric("Average Rating", f"{avg_rating:.2f} 🌟")
-                    
-                    rating_counts = feedback_df['rating'].value_counts().sort_index()
-                    st.bar_chart(rating_counts)
-                    
-                    with st.expander("View All Feedback Entries"):
-                        st.dataframe(feedback_df)
-            except Exception as e:
-                st.error(f"Could not load feedback: {e}")
-
-        with admin_tab2:
-            st.markdown("### Registered Users")
-            try:
-                users_df = pd.read_sql("SELECT username FROM users", user_engine)
-                st.metric("Total Users Registered", f"{users_df.shape[0]}")
-                st.dataframe(users_df)
-            except Exception as e:
-                st.error(f"Could not load users: {e}")
