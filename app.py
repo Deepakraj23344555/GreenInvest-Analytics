@@ -5,6 +5,20 @@ import time
 import json
 import sqlite3
 import datetime
+import sqlalchemy
+
+# Set up DB engine
+feedback_engine = sqlalchemy.create_engine("sqlite:///feedback.db")
+
+# Create feedback table if it doesn’t exist
+with feedback_engine.connect() as conn:
+    conn.execute(sqlalchemy.text("""
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content TEXT
+        )
+    """))
+
 
 # Import Authenticate and Hasher from streamlit_authenticator
 from streamlit_authenticator import Authenticate, Hasher 
