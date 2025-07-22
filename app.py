@@ -23,8 +23,6 @@ st.set_page_config(
 st.markdown("""
 <style>
 /* Target the buttons used for the star rating specifically by looking for their parent container */
-/* This specific selector targets buttons within a horizontally laid out block (like st.columns)
-   that are likely part of the star rating. Adjust if it affects other buttons unexpectedly. */
 div[data-testid="stHorizontalBlock"] .stButton > button {
     background-color: transparent !important;
     border: none !important;
@@ -196,7 +194,7 @@ def get_recommendations(e_score, s_score, g_score):
     recs = {'E': [], 'S': [], 'G': []}
     if e_score < 70: recs['E'].append("**High Impact:** Conduct a professional energy audit to identify efficiency opportunities.")
     if e_score < 80: recs['E'].append("**Medium Impact:** Implement a company-wide switch to LED lighting and optimize HVAC systems.")
-    if e_score < 60: recs['E'].append("**Critical:** Develop a comprehensive waste reduction and recycling strategy.")
+    if e_score < 60: recs['E'].append("Crital:** Develop a comprehensive waste reduction and recycling strategy.")
 
     if s_score < 70: recs['S'].append("**High Impact:** Introduce an anonymous employee feedback system to understand turnover causes.")
     if s_score < 80: recs['S'].append("**Medium Impact:** Implement diversity and inclusion training for all employees and management.")
@@ -240,9 +238,23 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
 
     st.divider()
 
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner", "💬 Feedback"])
+    # --- Tab Management ---
+    tab_labels = ["📊 Performance Overview", "🎯 Recommendations", "💰 Finance Marketplace", "🕰️ Historical Trends", "🧪 Scenario Planner", "💬 Feedback"]
 
-    with tab1:
+    # Determine which tab should be active after this rerun
+    if st.session_state.get('force_feedback_tab_active', False):
+        initial_tab_index = tab_labels.index("💬 Feedback")
+        st.session_state.force_feedback_tab_active = False # Reset the flag
+    else:
+        # Otherwise, try to restore the last selected tab from session state, or default to first
+        initial_tab_index = st.session_state.get('last_display_dashboard_tab_index', 0)
+
+    # Create the tabs. Store the selected label and its index.
+    selected_tab_label = st.tabs(tab_labels, default_index=initial_tab_index, key="main_display_dashboard_tabs")
+    st.session_state.last_display_dashboard_tab_index = tab_labels.index(selected_tab_label) # Persist for next run
+
+    # --- Tab Content Rendering ---
+    if selected_tab_label == "📊 Performance Overview":
         st.subheader("Performance Breakdown & Environmental Impact")
 
         # Metric Cards for E, S, G scores
@@ -294,7 +306,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.balloons()
             st.success("Congratulations! Your high ESG score is outstanding and unlocks premium opportunities. Keep up the great work, KD!")
 
-    with tab2:
+    elif selected_tab_label == "🎯 Recommendations":
         st.header("Actionable Recommendations")
         recommendations = get_recommendations(e_score, s_score, g_score)
         with st.container(border=True):
@@ -307,7 +319,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.subheader("⚖️ Governance")
             for rec in recommendations['G']: st.markdown(f"- {rec}")
 
-    with tab3:
+    elif selected_tab_label == "💰 Finance Marketplace":
         st.header("Your Green Finance Marketplace")
         st.write(f"Based on your ESG score of **{final_score:.1f}**, you have unlocked the following opportunities.")
         unlocked_opportunities = get_financial_opportunities(final_score)
@@ -321,7 +333,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                     st.write(opp['description'])
                     st.link_button(f"Apply Now {opp['icon']}", opp['url'])
 
-    with tab4: # Historical Trends Tab
+    elif selected_tab_label == "🕰️ Historical Trends":
         st.header("🕰️ Your ESG Performance History")
         history = get_esg_history(current_user_id)
         if not history:
@@ -346,7 +358,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.subheader("Raw Historical Data")
             st.dataframe(history_df[['timestamp', 'overall_score', 'e_score', 's_score', 'g_score']].set_index('timestamp').sort_index(ascending=False))
 
-    with tab5: # Scenario Planner Tab
+    elif selected_tab_label == "🧪 Scenario Planner":
         st.header("🧪 Scenario Planner: What If...?")
         st.write("Adjust the metrics below to see how your ESG score and opportunities would change.")
 
@@ -404,7 +416,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                 for opp in scenario_unlocked_opportunities:
                     st.markdown(f"- {opp['icon']} {opp['name']} (Min ESG: {opp['minimum_esg_score']})")
 
-    with tab6: # Feedback Tab
+    elif selected_tab_label == "💬 Feedback": # Content for the Feedback tab
         st.header("💬 Give Us Your Feedback!")
         st.write("Your feedback helps us improve GreenInvest Analytics.")
 
@@ -423,12 +435,14 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
         for i in range(1, 6): # Stars from 1 to 5
             with cols[i-1]:
                 # Determine the star emoji for the button label
-                # These are standard emojis, not HTML, so unsafe_allow_html is NOT needed for st.button.
+                # These are standard emojis, not HTML.
                 star_emoji_display = "⭐" if i <= selected_rating else "☆" 
                 
                 # Removed unsafe_allow_html=True from st.button
                 if st.button(star_emoji_display, key=f"select_star_{i}", help=f"Click to give {i} star{'s' if i > 1 else ''}", use_container_width=True):
                     st.session_state.feedback_rating = i
+                    # Set flag to force Feedback tab active on next rerun
+                    st.session_state.force_feedback_tab_active = True
                     # st.experimental_rerun() is implicitly called by st.button being clicked.
 
         # Display a clearer summary of the selected rating below the buttons
@@ -460,6 +474,8 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
                     st.session_state.feedback_rating = 0 # Reset to no selection
                     st.session_state.feedback_comment = "" # Clear comment
 
+                    # Set flag to force Feedback tab active on next rerun
+                    st.session_state.force_feedback_tab_active = True
                     # Trigger a rerun to visually clear star selection and text area
                     st.experimental_rerun() 
                 else:
