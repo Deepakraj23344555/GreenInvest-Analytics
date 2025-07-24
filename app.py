@@ -454,7 +454,8 @@ elif st.session_state["authentication_status"] is False:
     st.error('Username/password is incorrect.')
     display_registration_form("error_case")
 
-elif st.session_tate["authentication_status"] is None:
+# --- FIX --- Corrected the typo from st.session_tate to st.session_state
+elif st.session_state["authentication_status"] is None:
     st.info('Please log in or register to begin.')
     display_registration_form("initial_case")
 
