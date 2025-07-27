@@ -68,7 +68,7 @@ st.markdown("""
             color: #003300; font-size: 2.5rem; font-weight: bold;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);">
-        🌿 Welcome to <span style="color: #1b5e20;">Ecolytics</span> — Powering Sustainable Wealth 🌱
+        🌿 Welcome to <span style="color: #1b5e20;">GreenInvest Analytics</span> — Powering Sustainable Wealth 🌱
     </div>
 """, unsafe_allow_html=True)
 
@@ -480,7 +480,7 @@ if st.session_state["authentication_status"]:
     authenticator.logout('Logout', location='sidebar') # FIX APPLIED HERE: Removed 'form_name='
     
     # Welcome message and main app content
-    st.title("🌿 Ecolytics")
+    st.title("🌿 GreenInvest Analytics")
     st.markdown(f"Welcome back, **{st.session_state.name}**! Analyze and improve your ESG performance to unlock green finance opportunities.")
     
     st.sidebar.header("Step 1: Choose Input Method")
@@ -653,7 +653,7 @@ if st.session_state["authentication_status"]:
             st.info("Upload a CSV file using the sidebar to see your ESG analysis.")
 
     st.divider()
-    st.write("Made with ❤️ for a greener future. – Ecolytics")
+    st.write("Made with ❤️ for a greener future. – Friday")
 
 # --- AUTHENTICATION STATUS HANDLERS (for states where user is not logged in) ---
 elif st.session_state["authentication_status"] is False:
@@ -685,15 +685,15 @@ elif st.session_state["authentication_status"] is False:
                         st.success("You have successfully registered! Please log in above.")
                     else:
                         st.error("Username already exists. Please choose a different one.")
-    st.write("Made with ❤️ for a greener future. – Ecolytics")
+    st.write("Made with ❤️ for a greener future. – Friday")
 
 elif st.session_state["authentication_status"] is None:
-    st.info('Please log in or register to access the Ecolytics platform.')
+    st.info('Please log in or register to access the GreenInvest Analytics platform.')
     st.divider()
     
     # Registration form (for initial state)
     with st.expander("New User? Register Here", expanded=True):
-        st.subheader("Register for Ecolytics")
+        st.subheader("Register for GreenInvest Analytics")
         with st.form("register_form_initial"): # Unique key for this form
             new_name = st.text_input("Your Name", key="reg_name_initial")
             new_username = st.text_input("New Username", key="reg_username_initial")
@@ -715,4 +715,4 @@ elif st.session_state["authentication_status"] is None:
                         st.success("You have successfully registered! Please log in above.")
                     else:
                         st.error("Username already exists. Please choose a different one.")
-    st.write("Made with ❤️ for a greener future. – Ecolytics")
+    st.write("Made with ❤️ for a greener future. – Friday")
