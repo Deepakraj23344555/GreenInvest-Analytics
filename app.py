@@ -7,7 +7,7 @@ import sqlite3
 import datetime
 
 # Import Authenticate and Hasher from streamlit_authenticator
-from streamlit_authenticator import Authenticate, Hasher
+from streamlit_authenticator import Authenticate, Hasher 
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -285,7 +285,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.plotly_chart(fig_spider, use_container_width=True)
         with col2:
             fig_bar = go.Figure(go.Bar(x=[e_score, s_score, g_score], y=['Environmental', 'Social', 'Governance'], orientation='h',
-                                      marker_color=['#4CAF50', '#8BC34A', '#CDDC39']))
+                                       marker_color=['#4CAF50', '#8BC34A', '#CDDC39']))
             fig_bar.update_layout(title="Score Breakdown", xaxis_title="Score (out of 100)", height=350)
             st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -436,7 +436,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
     )
 
 
-# --- AUTHENTICATION SETUP ---
+# --- AUTHENTICATION SETUP ---  <--- MOVED THIS BLOCK UP!
 # Function to get users in the format Authenticate expects
 def get_all_users_for_authenticator():
     conn = sqlite3.connect(DATABASE_NAME)
@@ -467,10 +467,8 @@ authenticator = Authenticate(
 )
 
 # --- Main App Logic (Conditional based on authentication status) ---
-# Call the login method. Note: The exact call may depend on the library version.
-# This syntax is for streamlit-authenticator versions around 0.2.x
-# For newer versions (0.3.x+), the call would just be authenticator.login()
-name, authentication_status, username = authenticator.login('Login', 'main')
+# Call the login method with explicit keyword arguments
+name, authentication_status, username = authenticator.login(form_name='Login', location='main')
 
 if st.session_state["authentication_status"]:
     # User is authenticated
@@ -478,12 +476,12 @@ if st.session_state["authentication_status"]:
     st.session_state.name = name # Store user's display name
     st.session_state.user_id = get_user_id(username) # Retrieve and store user_id
     
-    # Sidebar logout button
-    authenticator.logout('Logout', 'sidebar')
+    # Sidebar logout button with explicit keyword arguments
+    authenticator.logout('Logout', location='sidebar') # FIX APPLIED HERE: Removed 'form_name='
     
     # Welcome message and main app content
-    # This st.title has been removed as the banner serves a similar purpose.
-    # st.title("🌿 GreenInvest Analytics") 
+    st.title("🌿 GreenInvest Analytics")
+    st.markdown(f"Welcome back, **{st.session_state.name}**! Analyze and improve your ESG performance to unlock green finance opportunities.")
     
     st.sidebar.header("Step 1: Choose Input Method")
     st.sidebar.divider()
@@ -592,7 +590,7 @@ if st.session_state["authentication_status"]:
             
             display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
         else:
-            st.info("Enter your data manually in the sidebar and click 'Calculate ESG Score' to view your dashboard.")
+            st.info("Enter your data manually in the sidebar and click 'Calculate ESG Score'.")
 
     else: # CSV Upload
         st.sidebar.header("Step 2: Upload Your Data")
@@ -665,11 +663,28 @@ elif st.session_state["authentication_status"] is False:
     # Registration form
     with st.expander("New User? Register Here", expanded=True):
         st.subheader("Register for GreenInvest Analytics")
-        try:
-            if authenticator.register_user('Register', preauthorization=False):
-                st.success('User registered successfully. Please log in.')
-        except Exception as e:
-            st.error(e)
+        with st.form("register_form"):
+            new_name = st.text_input("Your Name", key="reg_name")
+            new_username = st.text_input("New Username", key="reg_username")
+            new_password = st.text_input("New Password", type="password", key="reg_password")
+            confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm_password")
+            
+            register_button = st.form_submit_button("Register")
+
+            if register_button:
+                if new_password != confirm_password:
+                    st.error("Passwords do not match.")
+                elif len(new_username) < 3 or len(new_password) < 6:
+                    st.error("Username must be at least 3 characters and password at least 6 characters.")
+                else:
+                    # Generate bcrypt hash using Authenticate's Hasher
+                    hashed_passwords_list = Hasher([new_password]).generate()
+                    hashed_new_password = hashed_passwords_list[0] 
+
+                    if add_user(new_username, hashed_new_password, new_name):
+                        st.success("You have successfully registered! Please log in above.")
+                    else:
+                        st.error("Username already exists. Please choose a different one.")
     st.write("Made with ❤️ for a greener future. – Friday")
 
 elif st.session_state["authentication_status"] is None:
@@ -679,9 +694,25 @@ elif st.session_state["authentication_status"] is None:
     # Registration form (for initial state)
     with st.expander("New User? Register Here", expanded=True):
         st.subheader("Register for GreenInvest Analytics")
-        try:
-            if authenticator.register_user('Register', preauthorization=False):
-                st.success('User registered successfully. Please log in.')
-        except Exception as e:
-            st.error(e)
+        with st.form("register_form_initial"): # Unique key for this form
+            new_name = st.text_input("Your Name", key="reg_name_initial")
+            new_username = st.text_input("New Username", key="reg_username_initial")
+            new_password = st.text_input("New Password", type="password", key="reg_password_initial")
+            confirm_password = st.text_input("Confirm Password", type="password", key="reg_confirm_password_initial")
+            
+            register_button = st.form_submit_button("Register")
+
+            if register_button:
+                if new_password != confirm_password:
+                    st.error("Passwords do not match.")
+                elif len(new_username) < 3 or len(new_password) < 6:
+                    st.error("Username must be at least 3 characters and password at least 6 characters.")
+                else:
+                    hashed_passwords_list = Hasher([new_password]).generate()
+                    hashed_new_password = hashed_passwords_list[0]
+
+                    if add_user(new_username, hashed_new_password, new_name):
+                        st.success("You have successfully registered! Please log in above.")
+                    else:
+                        st.error("Username already exists. Please choose a different one.")
     st.write("Made with ❤️ for a greener future. – Friday")
