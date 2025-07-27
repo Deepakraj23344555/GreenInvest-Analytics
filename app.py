@@ -653,7 +653,7 @@ if st.session_state["authentication_status"]:
             st.info("Upload a CSV file using the sidebar to see your ESG analysis.")
 
     st.divider()
-    st.write("Made with ❤️ for a greener future. – Friday")
+    st.write("Made with ❤️ for a greener future. – GreeInvest Analytics")
 
 # --- AUTHENTICATION STATUS HANDLERS (for states where user is not logged in) ---
 elif st.session_state["authentication_status"] is False:
@@ -685,7 +685,7 @@ elif st.session_state["authentication_status"] is False:
                         st.success("You have successfully registered! Please log in above.")
                     else:
                         st.error("Username already exists. Please choose a different one.")
-    st.write("Made with ❤️ for a greener future. – Friday")
+    st.write("Made with ❤️ for a greener future. – GreeInvest Analytics")
 
 elif st.session_state["authentication_status"] is None:
     st.info('Please log in or register to access the GreenInvest Analytics platform.')
@@ -715,4 +715,4 @@ elif st.session_state["authentication_status"] is None:
                         st.success("You have successfully registered! Please log in above.")
                     else:
                         st.error("Username already exists. Please choose a different one.")
-    st.write("Made with ❤️ for a greener future. – Friday")
+    st.write("Made with ❤️ for a greener future. – GreeInvest Analytics")
