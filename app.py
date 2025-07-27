@@ -584,9 +584,8 @@ if st.session_state["authentication_status"]:
             st.session_state.last_gov_input = gov_data
 
             # Save to database
-            save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
-                             final_score, e_score, s_score, g_score,
-                             env_data, social_data, gov_data)
+            # The function probably looks like this
+            def save_esg_history(user_id, timestamp, final_score, e_score, s_score, g_score, env_data, social_data, gov_data):
             
             display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
         else:
