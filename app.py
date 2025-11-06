@@ -7,7 +7,7 @@ import sqlite3
 import datetime
 
 # Import Authenticate and Hasher from streamlit_authenticator
-from streamlit_authenticator import Authenticate, Hasher 
+from streamlit_authenticator import Authenticate, Hasher
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -285,7 +285,7 @@ def display_dashboard(final_score, e_score, s_score, g_score, env_data, social_d
             st.plotly_chart(fig_spider, use_container_width=True)
         with col2:
             fig_bar = go.Figure(go.Bar(x=[e_score, s_score, g_score], y=['Environmental', 'Social', 'Governance'], orientation='h',
-                                       marker_color=['#4CAF50', '#8BC34A', '#CDDC39']))
+                                      marker_color=['#4CAF50', '#8BC34A', '#CDDC39']))
             fig_bar.update_layout(title="Score Breakdown", xaxis_title="Score (out of 100)", height=350)
             st.plotly_chart(fig_bar, use_container_width=True)
 
@@ -583,12 +583,18 @@ if st.session_state["authentication_status"]:
             st.session_state.last_social_input = social_data
             st.session_state.last_gov_input = gov_data
 
-            # Save to database
-            save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
-                             final_score, e_score, s_score, g_score,
-                             env_data, social_data, gov_data)
-            
-            display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
+            # --- CORRECTION APPLIED HERE ---
+            # Check for a valid user_id BEFORE saving to the database
+            if st.session_state.user_id is None:
+                st.error("Error: Could not find user ID. Please log out and log back in to save your history.")
+            else:
+                # Save to database (Now safe)
+                save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
+                                 final_score, e_score, s_score, g_score,
+                                 env_data, social_data, gov_data)
+                
+                # Display the dashboard
+                display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
         else:
             st.info("Enter your data manually in the sidebar and click 'Calculate ESG Score'.")
 
@@ -636,12 +642,18 @@ if st.session_state["authentication_status"]:
                     st.session_state.last_social_input = social_data
                     st.session_state.last_gov_input = gov_data
                     
-                    # Save to database
-                    save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
-                                     final_score, e_score, s_score, g_score,
-                                     env_data, social_data, gov_data)
-                    
-                    display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
+                    # --- CORRECTION APPLIED HERE ---
+                    # Check for a valid user_id BEFORE saving to the database
+                    if st.session_state.user_id is None:
+                         st.error("Error: Could not find user ID. Please log out and log back in to save your history.")
+                    else:
+                        # Save to database (Now safe)
+                        save_esg_history(st.session_state.user_id, datetime.datetime.now().isoformat(),
+                                         final_score, e_score, s_score, g_score,
+                                         env_data, social_data, gov_data)
+                        
+                        # Display the dashboard
+                        display_dashboard(final_score, e_score, s_score, g_score, env_data, social_data, gov_data, st.session_state.user_id)
 
                 except KeyError as ke:
                     st.error(f"Missing expected metric in CSV: {ke}. Please check the template file.")
